@@ -1,0 +1,80 @@
+import {
+  Briefcase, Car, GraduationCap, HardHat, HeartPulse, Home, Laptop, ShieldCheck, ShoppingBag,
+  Sprout, Truck, UtensilsCrossed, Factory, Wrench, PenTool, Scale, Ruler, Scissors, HeartHandshake, Compass, Baby, BarChart3, Bike, Building2, Container, Droplets, Dumbbell, FlaskConical, Hammer, Landmark, Languages, Leaf, Megaphone, Mountain, Music, Package, PawPrint, Plane, Radio, Shirt, Smartphone, Users, Wheat, type LucideIcon,
+} from 'lucide-react';
+
+// Mirrors the categories seeded in the database (apps/api/prisma/seed/data.ts).
+// Replaced by an API call once the backend exposes /categories (Phase 6).
+export const CATEGORIES: { slug: string; name: string; icon: LucideIcon; examples: string }[] = [
+  { slug: 'construction', name: 'Construction and Building', icon: HardHat, examples: 'Masonry, carpentry, plumbing' },
+  { slug: 'automotive', name: 'Automotive and Mechanics', icon: Car, examples: 'Engine repair, welding, panel beating' },
+  { slug: 'agriculture', name: 'Agriculture and Farming', icon: Sprout, examples: 'Crops, livestock, coffee processing' },
+  { slug: 'hospitality', name: 'Hospitality and Food Service', icon: UtensilsCrossed, examples: 'Cooking, barista, hotel service' },
+  { slug: 'ict', name: 'Information Technology', icon: Laptop, examples: 'Web, mobile, IT support' },
+  { slug: 'healthcare', name: 'Healthcare', icon: HeartPulse, examples: 'Nursing, pharmacy, laboratory' },
+  { slug: 'education', name: 'Education and Training', icon: GraduationCap, examples: 'Teaching, tutoring, instruction' },
+  { slug: 'business', name: 'Business, Finance and Administration', icon: Briefcase, examples: 'Accounting, HR, office admin' },
+  { slug: 'manufacturing', name: 'Manufacturing and Industry', icon: Factory, examples: 'Machine operation, tailoring, QC' },
+  { slug: 'transport', name: 'Transport and Logistics', icon: Truck, examples: 'Driving, delivery, warehouse' },
+  { slug: 'domestic', name: 'Domestic and Household Services', icon: Home, examples: 'Cleaning, childcare, gardening' },
+  { slug: 'sales', name: 'Sales and Customer Service', icon: ShoppingBag, examples: 'Retail, customer care, marketing' },
+  { slug: 'security', name: 'Security Services', icon: ShieldCheck, examples: 'Guard duty, CCTV, access control' },
+  { slug: 'general-labor', name: 'General and Daily Labor', icon: Wrench, examples: 'Loading, earthwork, packing' },
+  { slug: 'media-creative', name: 'Media, Writing and Creative Work', icon: PenTool, examples: 'Writing, journalism, translation, photography' },
+  { slug: 'legal', name: 'Legal and Compliance', icon: Scale, examples: 'Advocacy, contracts, paralegal, compliance' },
+  { slug: 'engineering', name: 'Engineering and Technical Professions', icon: Ruler, examples: 'Civil, electrical, solar, telecom, HSE' },
+  { slug: 'beauty-care', name: 'Beauty and Personal Care', icon: Scissors, examples: 'Hairdressing, barbering, makeup, spa' },
+  { slug: 'social-services', name: 'Social Services and NGOs', icon: HeartHandshake, examples: 'Social work, counselling, M&E, proposals' },
+  { slug: 'tourism', name: 'Tourism and Travel', icon: Compass, examples: 'Tour guiding, ticketing, lodges, events' },
+  { slug: 'banking-finance', name: 'Banking, Insurance and Microfinance', icon: Landmark, examples: 'Teller, loans, insurance, microfinance' },
+  { slug: 'real-estate', name: 'Real Estate and Property Management', icon: Building2, examples: 'Brokerage, leasing, property care' },
+  { slug: 'telecom', name: 'Telecommunications', icon: Radio, examples: 'Network, fibre, towers, call centre' },
+  { slug: 'mining-energy', name: 'Mining, Energy and Utilities', icon: Mountain, examples: 'Mining, quarrying, power, fuel' },
+  { slug: 'aviation', name: 'Aviation and Airport Services', icon: Plane, examples: 'Ground handling, cabin crew, cargo' },
+  { slug: 'import-export', name: 'Import, Export and Customs', icon: Container, examples: 'Customs clearance, freight forwarding' },
+  { slug: 'food-processing', name: 'Food Processing and Beverage', icon: Wheat, examples: 'Milling, bakery, dairy, bottling' },
+  { slug: 'textile-leather', name: 'Textile, Garment and Leather', icon: Shirt, examples: 'Weaving, sewing, tanning, shoes' },
+  { slug: 'arts-entertainment', name: 'Arts, Music and Entertainment', icon: Music, examples: 'Music, dance, acting, design' },
+  { slug: 'sports-fitness', name: 'Sports, Fitness and Recreation', icon: Dumbbell, examples: 'Coaching, fitness training, lifeguard' },
+  { slug: 'veterinary', name: 'Veterinary and Animal Health', icon: PawPrint, examples: 'Animal health, vaccination, breeding' },
+  { slug: 'environment-natural', name: 'Environment and Natural Resources', icon: Leaf, examples: 'Forestry, conservation, climate' },
+  { slug: 'water-waste', name: 'Water, Sanitation and Waste Management', icon: Droplets, examples: 'Water supply, drilling, recycling' },
+  { slug: 'research-science', name: 'Research, Science and Laboratory', icon: FlaskConical, examples: 'Lab analysis, field research, surveys' },
+  { slug: 'crafts-artisan', name: 'Handicrafts and Traditional Crafts', icon: Hammer, examples: 'Weaving, pottery, blacksmith, carving' },
+  { slug: 'repair-services', name: 'Repair and Maintenance Services', icon: Smartphone, examples: 'Phone, electronics, appliance repair' },
+  { slug: 'childcare-eldercare', name: 'Childcare and Elder Care', icon: Baby, examples: 'Nursery, nanny, elder and disability care' },
+  { slug: 'public-administration', name: 'Public Administration and Civil Service', icon: Landmark, examples: 'Records, permits, planning, kebele office' },
+  { slug: 'procurement-supply', name: 'Procurement and Supply Chain', icon: Package, examples: 'Purchasing, stores, inventory, tenders' },
+  { slug: 'marketing-pr', name: 'Marketing, Advertising and Public Relations', icon: Megaphone, examples: 'Campaigns, branding, PR, market research' },
+  { slug: 'language-interpretation', name: 'Language, Translation and Interpretation', icon: Languages, examples: 'Interpreting, sign language, language teaching' },
+  { slug: 'delivery-courier', name: 'Delivery and Courier Services', icon: Bike, examples: 'Motorbike delivery, courier, taxi, bajaj' },
+  { slug: 'human-resources', name: 'Human Resources and Recruitment', icon: Users, examples: 'Recruiting, payroll, training, employee relations' },
+  { slug: 'data-analytics', name: 'Data, AI and Analytics', icon: BarChart3, examples: 'Data analysis, BI, machine learning' },
+];
+
+export const REGIONS = [
+  'Addis Ababa', 'Afar', 'Amhara', 'Benishangul-Gumuz', 'Central Ethiopia', 'Dire Dawa', 'Gambela',
+  'Harari', 'Oromia', 'Sidama', 'Somali', 'South Ethiopia', 'South West Ethiopia', 'Tigray',
+];
+
+// [enum value, label] matching OrganizationType in the database schema.
+export const ORG_TYPES: [string, string][] = [
+  ['PRIVATE_COMPANY', 'Private company'],
+  ['PUBLIC_ENTERPRISE', 'Public or state-owned enterprise'],
+  ['GOVERNMENT', 'Government office or agency'],
+  ['NGO', 'NGO or international organization'],
+  ['SME', 'Small or medium business'],
+  ['CONSTRUCTION', 'Construction company'],
+  ['FACTORY', 'Factory'],
+  ['HOTEL_RESTAURANT', 'Hotel or restaurant'],
+  ['AGRICULTURAL', 'Agricultural organization'],
+  ['HOUSEHOLD', 'Household'],
+  ['INDIVIDUAL', 'Individual employer'],
+  ['RECRUITMENT_AGENCY', 'Recruitment agency'],
+  ['TRAINING_INSTITUTION', 'Training institution'],
+  ['COOPERATIVE', 'Cooperative or association'],
+];
+
+export const EMPLOYMENT_TYPES = [
+  'Full-time', 'Part-time', 'Temporary', 'Contract', 'Freelance', 'Internship', 'Seasonal', 'Daily',
+];

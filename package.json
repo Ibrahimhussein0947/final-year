@@ -1,0 +1,13 @@
+{
+  "name": "ethiotalent-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EthioTalent AI - Connecting Ethiopian Talent with the Right Opportunities.",
+  "workspaces": ["apps/web", "apps/api", "packages/*"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "db:up": "docker compose -f infra/docker-compose.yml up -d db",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:logs": "docker compose -f infra/docker-compose.yml logs -f db"
+  }
+}

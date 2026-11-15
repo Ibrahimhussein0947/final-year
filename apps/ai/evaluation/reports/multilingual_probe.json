@@ -1,0 +1,58 @@
+{
+  "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "dim": 384,
+  "max_tokens": 128,
+  "languages": {
+    "English": {
+      "top1": 0.875,
+      "mrr": 0.922,
+      "auc": 0.983,
+      "mean_cos_same_occupation": 0.693,
+      "mean_cos_different": 0.194
+    },
+    "Amharic": {
+      "top1": 0.25,
+      "mrr": 0.458,
+      "auc": 0.772,
+      "mean_cos_same_occupation": 0.691,
+      "mean_cos_different": 0.585
+    },
+    "Afaan Oromo": {
+      "top1": 0.375,
+      "mrr": 0.512,
+      "auc": 0.755,
+      "mean_cos_same_occupation": 0.729,
+      "mean_cos_different": 0.56
+    }
+  },
+  "cross_lingual": {
+    "English -> Amharic": {
+      "top1": 0.562,
+      "mrr": 0.674,
+      "auc": 0.827,
+      "mean_cos_same_occupation": 0.428,
+      "mean_cos_different": 0.251
+    },
+    "English -> Afaan Oromo": {
+      "top1": 0.188,
+      "mrr": 0.295,
+      "auc": 0.571,
+      "mean_cos_same_occupation": 0.234,
+      "mean_cos_different": 0.203
+    }
+  },
+  "calibration": {
+    "related_pairs": {
+      "n": 10,
+      "min": 0.265,
+      "median": 0.69,
+      "p10": 0.545
+    },
+    "unrelated_pairs": {
+      "n": 50,
+      "max": 0.415,
+      "median": 0.229,
+      "p90": 0.348
+    }
+  }
+}

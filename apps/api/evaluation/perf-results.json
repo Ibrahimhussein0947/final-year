@@ -1,0 +1,45 @@
+{
+  "workers": 3000,
+  "jobs": 1500,
+  "jobList": {
+    "median": 14,
+    "p95": 19,
+    "max": 19,
+    "runs": 20
+  },
+  "jobListFiltered": {
+    "median": 16,
+    "p95": 20,
+    "max": 23,
+    "runs": 20
+  },
+  "jobTextSearch": {
+    "median": 12,
+    "p95": 15,
+    "max": 16,
+    "runs": 20
+  },
+  "recommendedJobs": {
+    "median": 47,
+    "p95": 57,
+    "max": 57,
+    "runs": 10
+  },
+  "recommendedWorkers": {
+    "median": 360,
+    "p95": 372,
+    "max": 372,
+    "runs": 10
+  },
+  "concurrent40": {
+    "totalMs": 186,
+    "allOk": true
+  },
+  "adminNational": {
+    "median": 49,
+    "p95": 49,
+    "max": 49,
+    "runs": 3
+  },
+  "note": "Local machine, database in Docker, single Node process. Not production hardware."
+}

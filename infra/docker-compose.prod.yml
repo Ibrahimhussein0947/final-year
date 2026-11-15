@@ -1,0 +1,79 @@
+# Production-style stack: Postgres, one-off migration/seed, API, web (Nginx). Optional AI service with `--profile ai`.
+#   cp infra/.env.prod.example infra/.env.prod   (fill in every value)
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod up -d --build
+# Only the web container publishes a port. The database and API are reachable only inside the compose network.
+name: ethiotalent
+
+x-api-env: &api-env
+  NODE_ENV: production
+  PORT: "4000"
+  DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?set POSTGRES_DB}?schema=public
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET (at least 32 characters)}
+  CORS_ORIGINS: ${PUBLIC_URL:?set PUBLIC_URL, e.g. https://jobs.example.com}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  UPLOAD_DIR: /data/uploads
+  EXPOSE_DEV_OTP: "false"
+  REVIEW_UNVERIFIED_JOBS: ${REVIEW_UNVERIFIED_JOBS:-false}
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Applies database migrations and the (idempotent) taxonomy seed, then exits.
+  migrate:
+    build: { context: .., dockerfile: infra/docker/api.Dockerfile, target: tools }
+    environment:
+      <<: *api-env
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: .., dockerfile: infra/docker/api.Dockerfile, target: runtime }
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      SMS_GATEWAY_URL: ${SMS_GATEWAY_URL:-}
+      SMS_GATEWAY_TOKEN: ${SMS_GATEWAY_TOKEN:-}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: .., dockerfile: infra/docker/web.Dockerfile }
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api: { condition: service_healthy }
+
+  # Optional semantic-matching service. Needs a large image build (PyTorch + model). Enable with: --profile ai
+  # and set AI_SERVICE_URL=http://ai:8100 and the same AI_SERVICE_TOKEN for the api.
+  ai:
+    profiles: ["ai"]
+    build: { context: .., dockerfile: infra/docker/ai.Dockerfile }
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+
+volumes:
+  pgdata:
+  uploads:

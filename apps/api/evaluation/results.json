@@ -1,0 +1,163 @@
+{
+  "embeddingModel": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "summary": {
+    "Keyword (BM25 on free text)": {
+      "p3": 0.6428571428571429,
+      "p5": 0.4142857142857143,
+      "r5": 0.9761904761904762,
+      "n3": 0.9409549828804862,
+      "n5": 0.9460859276816611,
+      "mrr": 1,
+      "coverage": 0.9111111111111111,
+      "emptyLists": 0
+    },
+    "Rule-based, skills only": {
+      "p3": 0.6904761904761905,
+      "p5": 0.4285714285714287,
+      "r5": 1,
+      "n3": 0.9680294283641773,
+      "n5": 0.9604329642152621,
+      "mrr": 1,
+      "coverage": 0.8,
+      "emptyLists": 0
+    },
+    "Rule-based weighted (the shipped engine)": {
+      "p3": 0.6666666666666667,
+      "p5": 0.4285714285714287,
+      "r5": 1,
+      "n3": 0.9631591066337314,
+      "n5": 0.9609138884471805,
+      "mrr": 1,
+      "coverage": 0.8,
+      "emptyLists": 0
+    },
+    "Hybrid (rules + embeddings)": {
+      "p3": 0.6666666666666667,
+      "p5": 0.4285714285714287,
+      "r5": 1,
+      "n3": 0.97106743826287,
+      "n5": 0.9688577956517817,
+      "mrr": 1,
+      "coverage": 0.8666666666666667,
+      "emptyLists": 0
+    },
+    "Semantic only (cosine, no rules)": {
+      "p3": 0.6904761904761906,
+      "p5": 0.4285714285714287,
+      "r5": 1,
+      "n3": 0.9295652652827412,
+      "n5": 0.9264074561696588,
+      "mrr": 1,
+      "coverage": 0.8666666666666667,
+      "emptyLists": 0
+    }
+  },
+  "randomSummary": {
+    "p5": 0.05,
+    "ndcg5": 0.07778410068490357,
+    "mrr": 0.1559756731623601
+  },
+  "ci": {
+    "mean": 0.014827960765519668,
+    "low": -0.01567237814250619,
+    "high": 0.046830304133378686
+  },
+  "fairness": {
+    "Keyword / Education": {
+      "vocational certificate": {
+        "found": 3,
+        "total": 4
+      },
+      "no formal education recorded": {
+        "found": 6,
+        "total": 6
+      },
+      "primary or secondary": {
+        "found": 8,
+        "total": 8
+      },
+      "diploma or higher": {
+        "found": 12,
+        "total": 12
+      }
+    },
+    "Keyword / Experience": {
+      "6+ years": {
+        "found": 11,
+        "total": 11
+      },
+      "3-5 years": {
+        "found": 12,
+        "total": 13
+      },
+      "0-2 years": {
+        "found": 6,
+        "total": 6
+      }
+    },
+    "Shipped engine / Education": {
+      "vocational certificate": {
+        "found": 4,
+        "total": 4
+      },
+      "no formal education recorded": {
+        "found": 6,
+        "total": 6
+      },
+      "primary or secondary": {
+        "found": 8,
+        "total": 8
+      },
+      "diploma or higher": {
+        "found": 12,
+        "total": 12
+      }
+    },
+    "Shipped engine / Experience": {
+      "6+ years": {
+        "found": 11,
+        "total": 11
+      },
+      "3-5 years": {
+        "found": 13,
+        "total": 13
+      },
+      "0-2 years": {
+        "found": 6,
+        "total": 6
+      }
+    },
+    "Hybrid / Education": {
+      "vocational certificate": {
+        "found": 4,
+        "total": 4
+      },
+      "no formal education recorded": {
+        "found": 6,
+        "total": 6
+      },
+      "primary or secondary": {
+        "found": 8,
+        "total": 8
+      },
+      "diploma or higher": {
+        "found": 12,
+        "total": 12
+      }
+    },
+    "Hybrid / Experience": {
+      "6+ years": {
+        "found": 11,
+        "total": 11
+      },
+      "3-5 years": {
+        "found": 13,
+        "total": 13
+      },
+      "0-2 years": {
+        "found": 6,
+        "total": 6
+      }
+    }
+  }
+}

@@ -1,0 +1,172 @@
+@import 'tailwindcss';
+
+/* Dark mode is toggled with a `dark` class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens ──────────────────────────────────────────
+   Navy primary, teal secondary, neutral surfaces, semantic colors.
+   Every component uses these tokens, never raw hex values. */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --border: #dbe2ec;
+  --text: #0f1b2d;
+  --text-muted: #51607a; /* 6.4:1 on --bg */
+  --primary: #0b1f3a;
+  --primary-hover: #12305a;
+  --on-primary: #ffffff;
+  --accent: #0f766e; /* teal-700: 5.5:1 on white */
+  --accent-hover: #0d5f58;
+  --accent-soft: #d9f3ef;
+  --on-accent: #ffffff;
+  --success: #15803d;
+  --success-soft: #dcf5e4;
+  --warning: #b45309;
+  --warning-soft: #fdecc8;
+  --danger: #b91c1c;
+  --danger-soft: #fde2e2;
+  --info: #1d4ed8;
+  --info-soft: #dce8fd;
+  --ring: #14b8a6;
+  --shadow: 0 1px 2px rgb(15 27 45 / 0.06), 0 4px 16px rgb(15 27 45 / 0.06);
+  --hero-from: #0b1f3a;
+  --hero-to: #0e4a56;
+}
+
+.dark {
+  --bg: #08111f;
+  --surface: #0f1c31;
+  --surface-2: #162843;
+  --border: #243a5c;
+  --text: #e8eef7;
+  --text-muted: #9fb0c9; /* 7.6:1 on --bg */
+  --primary: #5eead4;
+  --primary-hover: #99f6e4;
+  --on-primary: #06231f;
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-soft: #0f3a3a;
+  --on-accent: #04201d;
+  --success: #4ade80;
+  --success-soft: #11321f;
+  --warning: #fbbf24;
+  --warning-soft: #3a2a0a;
+  --danger: #f87171;
+  --danger-soft: #3b1414;
+  --info: #7aa7ff;
+  --info-soft: #14284f;
+  --ring: #2dd4bf;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.35);
+  --hero-from: #06101f;
+  --hero-to: #0b3a42;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-sans: 'Inter', 'Noto Sans Ethiopic', system-ui, sans-serif;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer base {
+  /* A grid with no explicit columns sizes its single column to the widest no-wrap text (a truncated job title, for
+     example), which pushes the page wider than a phone. Tailwind's grid-cols-* utilities sit in a later layer and win. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Browsers give <fieldset> min-width: min-content, so one wide child stretches a whole form past the screen. */
+  fieldset {
+    min-width: 0;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* iOS Safari zooms into any input whose text is smaller than 16px: keep them readable on touch screens. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+/* Installed app / notched phones: keep content out of the status bar, home indicator and rounded corners. */
+@layer base {
+  body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  @media (display-mode: standalone) {
+    html { overscroll-behavior-y: none; }
+    body { -webkit-user-select: none; user-select: none; }
+    input, textarea, [contenteditable], p, h1, h2, h3, li, td { -webkit-user-select: text; user-select: text; }
+  }
+}
+
+/* CV page: print only the sheet, on white paper, whatever the theme. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  .cv-sheet { color: #000 !important; }
+}
