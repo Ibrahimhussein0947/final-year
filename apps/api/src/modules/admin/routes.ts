@@ -17,6 +17,7 @@ import { listPolicies, ORGANIZATION_TYPES, policyUpdateSchema, updatePolicy } fr
 import { adminOrganizations, orgListSchema } from '../hiring/directory';
 import { adminListDefinitions, createDefinition, createDefinitionSchema, updateDefinition, updateDefinitionSchema } from '../criteria/admin';
 import { clearTranslationCache } from '../trust/routes';
+import { adminManageRouter } from './manage';
 
 const uuid = z.string().uuid();
 const idOf = (req: Request, name = 'id') => {
@@ -43,6 +44,7 @@ const csv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).joi
 export function adminRouter() {
   const router = Router();
   router.use(requireAuth, requireRole('ADMIN'));
+  router.use(adminManageRouter());
 
   router.get('/stats', async (_req, res) => {
     res.json({ stats: await svc.platformStats() });

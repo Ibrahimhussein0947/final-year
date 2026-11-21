@@ -17,10 +17,10 @@ import { assertCanReview } from '../subscriptions/service';
 import { rejectionTips, type ProfileState } from './tips';
 import { canReviewEmployer } from '../reviews/service';
 import { trustOf } from '../workers/trust';
+import { getSettings } from '../admin/settings';
 import { reviewApplicant } from '../review/rules';
 import { CONTACT_VISIBLE, INTERVIEWABLE, WORKER_CAN_WITHDRAW, EMPLOYER_TRANSITIONS, canEmployerMove } from './transitions';
 
-const DAILY_APPLICATION_LIMIT = 30;
 
 /** "Qualified": no must-have requirement is missed and the overall match is at least moderate. A label for tracking, not a decision. */
 export const QUALIFIED_MIN_SCORE = 60;
@@ -65,7 +65,7 @@ export async function apply(userId: string, jobId: string, coverNote: string | n
   if (!job) throw notFound('This job is not open for applications');
 
   const recent = await prisma.application.count({ where: { workerId, createdAt: { gte: new Date(Date.now() - 86_400_000) } } });
-  if (recent >= DAILY_APPLICATION_LIMIT) throw tooMany('Daily application limit reached. Try again tomorrow.');
+  if (recent >= (await getSettings()).dailyApplicationLimit) throw tooMany('Daily application limit reached. Try again tomorrow.');
 
   const existing = await prisma.application.findUnique({ where: { jobId_workerId: { jobId, workerId } } });
   if (existing && existing.status !== 'WITHDRAWN') throw conflict('You have already applied to this job');

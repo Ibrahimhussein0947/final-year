@@ -33,10 +33,13 @@ import { hiringRouter } from './modules/hiring/routes';
 import { skillTestsAdminRouter, skillTestsRouter } from './modules/skilltests/routes';
 import { verificationRouter } from './modules/verification/routes';
 import { adminRouter } from './modules/admin/routes';
+import { siteRouter } from './modules/admin/manage';
+import { maintenanceGuard, useSettingsStore, type SettingsStore } from './modules/admin/settings';
 import { notificationsRouter } from './modules/notifications/routes';
 import { telegramWebhookRouter } from './modules/notifications/telegram';
 
-export function createApp(opts: { authRateLimitMax?: number } = {}) {
+export function createApp(opts: { authRateLimitMax?: number; settings?: SettingsStore } = {}) {
+  if (opts.settings) useSettingsStore(opts.settings); // tests pass an in-memory store so they never change shared settings
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // behind Nginx in production
@@ -52,6 +55,7 @@ export function createApp(opts: { authRateLimitMax?: number } = {}) {
   );
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
+  app.use(maintenanceGuard());
 
   app.get('/health', async (_req, res) => {
     await prisma.$queryRaw`SELECT 1`;
@@ -86,6 +90,7 @@ export function createApp(opts: { authRateLimitMax?: number } = {}) {
   app.use('/api/v1/admin/training', trainingAdminRouter());
   app.use('/api/v1/training', trainingRouter());
   app.use('/api/v1/admin', adminRouter());
+  app.use('/api/v1', siteRouter());
   app.use('/api/v1/notifications', notificationsRouter());
   app.use('/api/v1/telegram', telegramWebhookRouter());
 

@@ -1579,3 +1579,39 @@ model ServiceBlock {
 
   @@id([providerUserId, customerId])
 }
+
+// ───────────────────────── Administration: settings and announcements ─────────────────────────
+
+// Switches an administrator can change without a deployment (maintenance mode, registration, daily application limit).
+// Only known keys are accepted by the API; see modules/admin/settings.ts.
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
+enum AnnouncementAudience {
+  ALL
+  WORKERS
+  EMPLOYERS
+}
+
+// A notice from the administrators, shown as a banner while it is active and optionally sent to each person's notifications.
+// `regionId` is a Location of level REGION; empty means everywhere. A withdrawn announcement stops showing at once.
+model Announcement {
+  id            String               @id @default(uuid())
+  title         String
+  body          String
+  audience      AnnouncementAudience @default(ALL)
+  regionId      String?
+  startsAt      DateTime             @default(now())
+  endsAt        DateTime?
+  withdrawnAt   DateTime?
+  notifiedCount Int                  @default(0)
+  createdById   String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([startsAt, endsAt])
+}

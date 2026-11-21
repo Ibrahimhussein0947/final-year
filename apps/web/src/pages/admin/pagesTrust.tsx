@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { downloadProtected, useAdminAction, useAdminQuery, type AdminStats, type AdminUser, type Paged, type PendingJob, type ReportItem, type VerificationItem } from '@/lib/admin';
 import { api } from '@/lib/api';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '–');
 const ErrorLine = ({ text }: { text: string | null }) => (text ? <p role="alert" className="mt-2 text-sm text-danger">{text}</p> : null);
@@ -85,7 +86,7 @@ export function AdminUsers() {
             <tbody>
               {list.data.items.map((u) => (
                 <tr key={u.id} className="border-b border-border last:border-0 align-top">
-                  <td className="p-3"><p className="font-medium">{u.fullName}</p>{u.organization && <p className="text-xs text-muted">{u.organization.name} · {u.organization.verificationStatus.toLowerCase()}</p>}</td>
+                  <td className="p-3"><Link to={`/admin/users/${u.id}`} className="font-medium text-accent hover:underline">{u.fullName}</Link>{u.organization && <p className="text-xs text-muted">{u.organization.name} · {u.organization.verificationStatus.toLowerCase()}</p>}</td>
                   <td className="p-3">{u.role.toLowerCase()}</td>
                   <td className="p-3 text-xs">{u.phone}{u.phoneVerified ? ' ✓' : ''}<br />{u.email ?? '–'}</td>
                   <td className="p-3 text-xs">{when(u.createdAt)}<br />last login {when(u.lastLoginAt)}</td>

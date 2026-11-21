@@ -34,7 +34,8 @@ export type NotificationType =
   | 'service.inquiry'
   | 'service.inquiry_accepted'
   | 'service.inquiry_declined'
-  | 'service.removed';
+  | 'service.removed'
+  | 'announcement';
 
 const SMS_PER_DAY = 5;
 

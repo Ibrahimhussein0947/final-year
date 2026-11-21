@@ -9,6 +9,7 @@ import { badRequest, conflict, forbidden, notFound, tooMany, twoFactorRequired, 
 import { newOpaqueToken, safeEqualHex, sha256 } from '../../lib/security';
 import { notifier } from '../../integrations/notify';
 import { signAccessToken } from '../../middleware/auth';
+import { assertRegistrationOpen } from '../admin/settings';
 import { generateSecret, otpauthUrl, verifyCode } from '../../lib/totp';
 import type { LoginInput, RegisterInput } from './schema';
 
@@ -69,6 +70,7 @@ async function issueSession(user: Pick<User, 'id' | 'role'>, req: Request) {
 }
 
 export async function register(input: RegisterInput, req: Request) {
+  await assertRegistrationOpen();
   const clash = await prisma.user.findFirst({
     where: { OR: [{ phone: input.phone }, ...(input.email ? [{ email: input.email }] : [])] },
     select: { phone: true },

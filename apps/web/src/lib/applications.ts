@@ -127,6 +127,7 @@ export function notificationLink(n: AppNotification, role: string | undefined): 
     case 'service.inquiry_declined': return '/service-requests';
     case 'service.removed': return '/my-services';
     case 'job.reviewed': return '/employer/jobs';
+    case 'announcement': return '/';
     case 'verification.reviewed': return role === 'EMPLOYER' ? '/organization' : '/profile';
     case 'job.matches': return p.jobId ? `/employer/jobs/${p.jobId}/recommended` : '/employer/jobs';
     case 'application.auto': return '/applications';
@@ -150,6 +151,7 @@ export function notificationText(n: AppNotification): string {
   const p = n.payload as { jobTitle?: string; status?: AppStatus; scheduledAt?: string; fromName?: string; count?: number; score?: number; decision?: string; kind?: string; note?: string; rescheduled?: boolean; window?: string; organizationName?: string; searchName?: string; matching?: number; strong?: number; reasons?: string[]; otherMatches?: number; candidateName?: string; topJob?: string; planName?: string; approved?: boolean; response?: 'CONFIRMED' | 'DECLINED'; accepted?: boolean; startDate?: string; respondBy?: string; wasAccepted?: boolean; audience?: string; by?: string };
   const job = p.jobTitle ? `"${p.jobTitle}"` : 'a job';
   switch (n.type) {
+    case 'announcement': return `Announcement: ${(n.payload as { title?: string }).title ?? 'a notice from the administrators'}`;
     case 'job.reviewed': return `Your job ${job} was ${(p.decision ?? 'reviewed').toLowerCase()} by a moderator${p.note ? `: ${p.note}` : ''}`;
     case 'verification.reviewed': return `Your ${p.kind === 'EMPLOYER' ? 'organization' : (p.kind ?? '').toLowerCase()} verification was ${(p.decision ?? 'reviewed').toLowerCase()}${p.note ? `: ${p.note}` : ''}`;
     case 'message.new': return `${p.count && p.count > 1 ? `${p.count} new messages` : 'New message'} from ${p.fromName ?? 'someone'}`;

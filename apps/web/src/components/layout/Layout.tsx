@@ -6,6 +6,7 @@ import { Logo } from '@/components/Logo';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { useAuth } from '@/app/auth';
 import { MessagesLink, NotificationBell } from '@/components/NotificationBell';
+import { SiteNotices } from '@/components/SiteNotices';
 import { useI18n, LOCALES, type Locale } from '@/i18n';
 import { useTheme } from '@/app/theme';
 import { cn } from '@/lib/cn';
@@ -246,6 +247,7 @@ export function Layout() {
         Skip to content
       </a>
       <div className="print:hidden"><Header /></div>
+      <SiteNotices />
       <main id="main" className="flex-1">
         <Outlet />
       </main>

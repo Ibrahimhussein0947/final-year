@@ -20,6 +20,7 @@ import { AdminTeam } from '@/pages/admin/pagesTeam';
 import { AdminPlans } from '@/pages/admin/pagesPlans';
 import { AdminTraining } from '@/pages/admin/pagesTraining';
 import { AdminPlaces } from '@/pages/admin/pagesPlaces';
+import { AdminAnnouncements, AdminJobs, AdminSettings, AdminUserDetail } from '@/pages/admin/pagesManage';
 import Dashboard from '@/pages/Dashboard';
 import WorkerProfilePage from '@/pages/worker/WorkerProfilePage';
 import CvBuilderPage from '@/pages/worker/CvBuilder';
@@ -109,6 +110,10 @@ export default function App() {
                 <Route path="admin" element={<RequireAuth roles={['ADMIN']}><AdminLayout /></RequireAuth>}>
                   <Route index element={<AdminOverview />} />
                   <Route path="users" element={<AdminUsers />} />
+                  <Route path="users/:id" element={<AdminUserDetail />} />
+                  <Route path="announcements" element={<AdminAnnouncements />} />
+                  <Route path="jobs" element={<AdminJobs />} />
+                  <Route path="settings" element={<AdminSettings />} />
                   <Route path="verification" element={<AdminVerification />} />
                   <Route path="moderation" element={<AdminModeration />} />
                   <Route path="taxonomy" element={<AdminTaxonomy />} />
