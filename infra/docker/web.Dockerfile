@@ -10,7 +10,7 @@ COPY apps/web ./apps/web
 WORKDIR /app/apps/web
 RUN npx vite build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 COPY infra/nginx/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
