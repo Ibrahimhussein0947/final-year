@@ -68,7 +68,7 @@ export function BasicsForm({ profile }: { profile: WorkerProfile }) {
     },
   });
   return (
-    <SectionCard title="About you" description="Employers see this first. Be specific about what you can do.">
+    <SectionCard id="section-about" title="About you" description="Employers see this first. Be specific about what you can do.">
       <form
         noValidate
         className="grid gap-4 sm:grid-cols-2"
@@ -118,7 +118,7 @@ export function LocationPicker({ profile }: { profile: WorkerProfile }) {
   const levels = Math.min(chain.length + 1, 4);
 
   return (
-    <SectionCard title="Where you can work" description="Pick the most specific area you know. Employers only see down to woreda.">
+    <SectionCard id="section-location" title="Where you can work" description="Pick the most specific area you know. Employers only see down to woreda.">
       <div className="grid gap-4 sm:grid-cols-2">
         {Array.from({ length: levels }, (_, i) => (
           <LocationLevel key={i} label={labels[i]} parentId={i === 0 ? undefined : chain[i - 1]} value={chain[i] ?? ''} onChange={(id) => setChain((c) => [...c.slice(0, i), ...(id ? [id] : [])])} />
@@ -200,7 +200,7 @@ export function PreferencesForm({ profile }: { profile: WorkerProfile }) {
     },
   });
   return (
-    <SectionCard title="Job preferences and availability" description="Used to match you with suitable jobs. Salary is in Ethiopian birr (ETB) per month.">
+    <SectionCard id="section-preferences" title="Job preferences and availability" description="Used to match you with suitable jobs. Salary is in Ethiopian birr (ETB) per month.">
       <form
         noValidate
         className="space-y-5"
@@ -283,7 +283,7 @@ export function SkillsSection({ profile }: { profile: WorkerProfile }) {
   const owned = new Set(profile.skills.map((s) => s.skillId));
 
   return (
-    <SectionCard title="Skills" description="Add what you can actually do. Skills are marked self-reported until an administrator verifies them. Three or more skills count towards completion.">
+    <SectionCard id="section-skills" title="Skills" description="Add what you can actually do. Skills are marked self-reported until an administrator verifies them. Three or more skills count towards completion.">
       <TextField label="Search skills" placeholder="e.g. welding, cooking, driving" value={q} onChange={(e) => setQ(e.target.value)} />
       {q.trim().length >= 2 && (
         <ul className="mt-2 flex flex-wrap gap-2" aria-label="Skill search results">
@@ -337,9 +337,9 @@ export const EDU_LEVELS: [string, string][] = [
   ['DIPLOMA', 'Diploma'], ['BACHELOR', "Bachelor's degree"], ['MASTER', "Master's degree"], ['DOCTORATE', 'Doctorate'],
 ];
 
-function ListShell({ title, description, empty, items, form }: { title: string; description?: string; empty: string; items: ReactNode[]; form: ReactNode }) {
+function ListShell({ id, title, description, empty, items, form }: { id?: string; title: string; description?: string; empty: string; items: ReactNode[]; form: ReactNode }) {
   return (
-    <SectionCard title={title} description={description}>
+    <SectionCard id={id} title={title} description={description}>
       {items.length === 0 ? <p className="mb-4 text-sm text-muted">{empty}</p> : <ul className="mb-5 divide-y divide-border">{items}</ul>}
       {form}
     </SectionCard>
@@ -364,6 +364,7 @@ export function ExperienceSection({ profile }: { profile: WorkerProfile }) {
   const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof expSchema>>({ resolver: zodResolver(expSchema), defaultValues: { title: '', employer: '', startDate: '', endDate: '', description: '' } });
   return (
     <ListShell
+      id="section-experience"
       title="Work history"
       empty="No work history yet. Informal and daily work counts too."
       items={profile.experiences.map((e) => (

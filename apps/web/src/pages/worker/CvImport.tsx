@@ -8,6 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import type { CvAnalysisResult, CvDraft } from '@/lib/analysis';
 import type { WorkerProfile } from '@/lib/profile';
 import { EDU_LABEL } from '@/lib/format';
+import { MissingEssentials } from '@/components/MissingEssentials';
 
 type On<T> = T & { on: boolean };
 const input = 'h-9 w-full rounded-lg border border-border bg-surface px-2 text-sm';
@@ -93,6 +94,7 @@ export function CvImport({ profile }: { profile: WorkerProfile }) {
       )}
       {busy && <p className="mt-2 text-sm text-muted">Reading your CV. A photo or scan can take up to a minute.</p>}
       {done && <div className="mt-3"><Alert tone="success">{done}</Alert></div>}
+      {done && <div className="mt-3"><MissingEssentials profile={profile} /></div>}
       {error && <div className="mt-3"><Alert tone="danger">{error}</Alert></div>}
 
       {draft && p && (

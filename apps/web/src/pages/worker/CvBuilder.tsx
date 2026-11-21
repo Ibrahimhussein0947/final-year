@@ -1,5 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
 import { Download, Printer } from 'lucide-react';
 import { fetchBlobUrl } from '@/lib/api';
 import { Alert, Card, Skeleton } from '@/components/ui/primitives';
@@ -8,6 +7,7 @@ import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useAuth } from '@/app/auth';
 import { useProtectedImage, useWorkerProfile, ACTIVITY_LABEL, type WorkerProfile } from '@/lib/profile';
 import { EDU_LEVELS } from '@/pages/worker/sections';
+import { MissingEssentials } from '@/components/MissingEssentials';
 
 type Template = 'classic' | 'compact';
 const SECTIONS = [
@@ -154,7 +154,6 @@ export default function CvBuilderPage() {
   const [showContact, setShowContact] = useState(true);
   const [showPhoto, setShowPhoto] = useState(false);
   const [show, setShow] = useState<Record<SectionKey, boolean>>(() => Object.fromEntries(SECTIONS.map(([k]) => [k, true])) as Record<SectionKey, boolean>);
-  const thin = useMemo(() => (q.data ? q.data.completion.pct < 40 : false), [q.data]);
   const [lang, setLang] = useState<'en' | 'am' | 'om'>(user?.locale ?? 'en');
   const [downloading, setDownloading] = useState(false);
   const [dlError, setDlError] = useState<string | null>(null);
@@ -234,11 +233,7 @@ export default function CvBuilderPage() {
                 </Button>
                 <p className="text-xs text-muted">Printing uses the style and choices above. In the print window choose “Save as PDF” as the printer. Skills and certificates not yet verified are shown as you wrote them.</p>
               </Card>
-              {thin && (
-                <Alert tone="warning">
-                  Your profile is only {q.data.completion.pct}% complete, so the CV will look thin. <Link to="/profile" className="font-semibold underline">Add more to your profile</Link>.
-                </Alert>
-              )}
+              <MissingEssentials profile={q.data} />
             </aside>
             <div className="min-w-0 overflow-x-auto">
               <Sheet profile={q.data} name={user.fullName} phone={user.phone} email={user.email} show={show} template={template} showContact={showContact} photo={showPhoto ? photo : null} />

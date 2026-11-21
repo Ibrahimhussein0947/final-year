@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Check, Circle } from 'lucide-react';
 import { Alert, Card, Skeleton } from '@/components/ui/primitives';
 import { LinkButton } from '@/components/ui/Button';
@@ -15,6 +17,11 @@ import { PortfolioSection } from '@/pages/worker/Portfolio';
 
 export default function WorkerProfilePage() {
   const q = useWorkerProfile();
+  const { hash } = useLocation();
+  // Links like /profile#section-skills (from the missing-essentials list) scroll once the sections exist.
+  useEffect(() => {
+    if (q.data && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [q.data, hash]);
 
   return (
     <>
