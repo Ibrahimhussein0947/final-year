@@ -1,6 +1,6 @@
 # Build context: the repository root.   docker build -f infra/docker/api.Dockerfile --target runtime .
 # Targets: "runtime" (the API server) and "tools" (migrations, seed, admin creation: has dev dependencies).
-FROM node:22-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

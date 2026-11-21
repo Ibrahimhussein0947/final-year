@@ -1,5 +1,5 @@
 # Build context: the repository root. Builds the React app and serves it with Nginx, which also proxies /api and /socket.io.
-FROM node:22-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
