@@ -16,6 +16,7 @@ import { PortfolioGallery } from '@/pages/worker/Portfolio';
 import { EmployerOffer } from '@/components/OfferPanels';
 import { useInterviewConfig } from '@/lib/interviews';
 import { MatchPanel } from '@/components/MatchPanel';
+import { ApplicantReviewPanel } from '@/components/ReviewPanel';
 import { describeRecorded, STEP_FORM_LABEL, useHiringSteps, type StepKind } from '@/lib/selectionSteps';
 import { EDU_LABEL, formatSalary, TYPE_LABEL } from '@/lib/format';
 
@@ -306,6 +307,7 @@ export default function CandidatePage() {
           </Card>
 
           {v.match && <MatchPanel match={v.match} title="Match analysis" />}
+          <ApplicantReviewPanel applicationId={v.application.id} />
 
           <Card className="p-5">
             <h3 className="font-semibold">Fit with this job's skills</h3>

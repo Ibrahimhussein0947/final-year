@@ -23,6 +23,7 @@ import { savedSearchesRouter } from './modules/jobs/savedSearches';
 import { applicationsRouter } from './modules/applications/routes';
 import { matchingRouter } from './modules/matching/routes';
 import { analysisRouter } from './modules/analysis/routes';
+import { reviewRouter } from './modules/review/routes';
 import { messagingRouter } from './modules/messaging/routes';
 import { trustRouter } from './modules/trust/routes';
 import { documentsRouter } from './modules/documents/routes';
@@ -72,6 +73,7 @@ export function createApp(opts: { authRateLimitMax?: number } = {}) {
   app.use('/api/v1', applicationsRouter());
   app.use('/api/v1', matchingRouter());
   app.use('/api/v1', analysisRouter());
+  app.use('/api/v1', reviewRouter());
   app.use('/api/v1', messagingRouter());
   app.use('/api/v1', trustRouter());
   app.use('/api/v1', documentsRouter());

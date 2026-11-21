@@ -17,6 +17,7 @@ import { assertCanReview } from '../subscriptions/service';
 import { rejectionTips, type ProfileState } from './tips';
 import { canReviewEmployer } from '../reviews/service';
 import { trustOf } from '../workers/trust';
+import { reviewApplicant } from '../review/rules';
 import { CONTACT_VISIBLE, INTERVIEWABLE, WORKER_CAN_WITHDRAW, EMPLOYER_TRANSITIONS, canEmployerMove } from './transitions';
 
 const DAILY_APPLICATION_LIMIT = 30;
@@ -284,6 +285,17 @@ export async function candidateView(userId: string, applicationId: string) {
     history: history.map((h) => ({ from: h.fromStatus, to: h.toStatus, note: h.note, at: h.createdAt })),
     interviews: interviews.map(interviewOut),
   };
+}
+
+/** Rule-based review of one applicant for the employer (see review/rules.ts). Reads only; does not count as a profile view. */
+export async function applicantReview(userId: string, applicationId: string) {
+  const app = await ownedApplication(userId, applicationId);
+  const [match, worker, jobs] = await Promise.all([
+    scoreWorkersForJob(app.job.id, [app.worker.id]).then((m) => m.get(app.worker.id)),
+    prisma.workerProfile.findUnique({ where: { id: app.worker.id }, select: { cvFileId: true } }),
+    prisma.workExperience.findMany({ where: { workerId: app.worker.id }, select: { title: true, startDate: true, endDate: true } }),
+  ]);
+  return reviewApplicant({ match: match ? publicMatch(match) : null, coverNote: app.coverNote, jobs, hasCv: !!worker?.cvFileId && app.status !== 'WITHDRAWN' });
 }
 
 export async function changeStatus(userId: string, applicationId: string, to: ApplicationStatus, note: string | null) {

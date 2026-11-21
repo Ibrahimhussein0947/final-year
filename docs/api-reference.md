@@ -207,6 +207,14 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | POST | `/workers/me/cv/analyze` | signed in, worker only |
 | POST | `/workers/me/cv/apply` | signed in, worker only |
 
+## review — `apps/api/src/modules/review/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/review/profile` | signed in, worker only |
+| POST | `/review/job` | signed in, employer only |
+| GET | `/review/applications/:id` | signed in, employer only |
+
 ## messaging — `apps/api/src/modules/messaging/routes.ts`
 
 | Method | Path | Access |
@@ -388,4 +396,4 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | POST | `/telegram/webhook` | public |
 
-Total: 237 routes.
+Total: 240 routes.

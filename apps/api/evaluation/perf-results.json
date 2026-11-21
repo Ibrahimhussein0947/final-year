@@ -2,43 +2,43 @@
   "workers": 3000,
   "jobs": 1500,
   "jobList": {
-    "median": 27,
-    "p95": 34,
-    "max": 35,
+    "median": 13,
+    "p95": 17,
+    "max": 18,
     "runs": 20
   },
   "jobListFiltered": {
-    "median": 33,
-    "p95": 37,
-    "max": 47,
+    "median": 16,
+    "p95": 19,
+    "max": 21,
     "runs": 20
   },
   "jobTextSearch": {
-    "median": 37,
-    "p95": 1048,
-    "max": 1197,
+    "median": 16,
+    "p95": 25,
+    "max": 28,
     "runs": 20
   },
   "recommendedJobs": {
-    "median": 83,
-    "p95": 100,
-    "max": 100,
+    "median": 40,
+    "p95": 62,
+    "max": 62,
     "runs": 10
   },
   "recommendedWorkers": {
-    "median": 478,
-    "p95": 537,
-    "max": 537,
+    "median": 337,
+    "p95": 363,
+    "max": 363,
     "runs": 10
   },
   "concurrent40": {
-    "totalMs": 351,
+    "totalMs": 217,
     "allOk": true
   },
   "adminNational": {
-    "median": 105,
-    "p95": 108,
-    "max": 108,
+    "median": 47,
+    "p95": 50,
+    "max": 50,
     "runs": 3
   },
   "note": "Local machine, database in Docker, single Node process. Not production hardware."

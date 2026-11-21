@@ -11,6 +11,7 @@ import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { LocationLevel, SectionCard } from '@/pages/worker/sections';
 import { JobAnalysisPanel, type AnalysisSelection } from '@/pages/employer/JobAnalysis';
 import { api, ApiError } from '@/lib/api';
+import { FindingsPanel, type Review } from '@/components/ReviewPanel';
 import type { JobRequirement } from '@/lib/criteria';
 import { SectorRequirements } from '@/pages/employer/SectorRequirements';
 import { useCategories, useSkillSearch } from '@/lib/profile';
@@ -245,6 +246,23 @@ function Form({ job }: { job?: JobDetail }) {
           </div>
           <JobAnalysisPanel title={watch('title')} description={watch('description')} onApply={applyAnalysis} />
         </SectionCard>
+
+        <FindingsPanel
+          title="Look over my post"
+          intro="Checks the post before you publish: unclear wording, missing pay or skills, biased or scam-like phrases."
+          run={() => {
+            const v = getValues();
+            return api<{ review: Review }>('/review/job', {
+              method: 'POST',
+              body: {
+                title: v.title, description: v.description, salaryMin: num(v.salaryMin), salaryMax: num(v.salaryMax), deadline: v.deadline || null,
+                skillCount: skills.length, requiredSkillCount: skills.filter((s) => s.importance === 'REQUIRED').length,
+                hasLocation: !!chain[chain.length - 1], schedule: v.schedule || null, benefits: v.benefits || null,
+                minExperienceYears: num(v.minExperienceYears), remote: v.workMode === 'REMOTE',
+              },
+            });
+          }}
+        />
 
         <SectionCard title="Location" description="Required for on-site and hybrid jobs.">
           <div className="grid gap-4 sm:grid-cols-2">

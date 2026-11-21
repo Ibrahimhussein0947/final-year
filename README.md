@@ -90,6 +90,12 @@ The Python service (`apps/ai`), the API client, embedding storage, the hybrid sk
 - **Workers:** after uploading a CV (PDF), "Read my CV" drafts skills, work history, education, certificates, years of experience and a biography for review and correction; only ticked items are saved, always as self-reported.
 - It uses keyword and pattern rules plus the skill taxonomy, **not a language model**, and works in English only; scanned PDFs are not supported (no OCR). Details and limits: [docs/03-cv-and-job-analysis.md](docs/03-cv-and-job-analysis.md).
 
+### "Look it over" reviews (rule-based)
+- **Worker profile** (`/profile`, "Look over my profile"): checks the headline, biography (length, numbers, capital letters, phone or chat links), skills, work history (undescribed jobs, no achievements, years claimed versus jobs listed, gaps), languages, photo and CV, and ranks what to fix first. Gaps are reported as things to explain, never as faults.
+- **Job post** (job form, "Look over my post"): runs before publishing and reuses the bias and scam checks, then suggests clearer titles, a fuller description, skills, pay, place, deadline and schedule.
+- **Applicant** (candidate page, "Look over this applicant"): strengths, gaps and questions to ask, built from the stored match, the work history and the cover note. It carries a note that it is not a reason to reject anyone.
+- All three are fixed rules (`apps/api/src/modules/review/rules.ts`), **not a language model**, English wording only, read-only and unsaved. A real language model (for example the Claude API) would need an API key, costs money and sends text to a provider, so it is not used; see the "Generative AI assistants" item in docs/00-ARCHITECTURE-AND-PLAN.md.
+
 ## Messaging and notifications (Phase 11)
 - Messages between an employer and a worker, tied to an application (`/messages`), delivered live over Socket.IO, with unread badges, "Seen" receipts and a notification bell with toasts. Workers get job-match alerts (opt-out, max 3 a day).
 - **SMS is optional and currently off**: no provider is connected, so no text has ever been sent. Set `SMS_GATEWAY_URL` and `SMS_GATEWAY_TOKEN` to enable the generic gateway adapter; real operators need their own adapter. SMS texts are generic by design.

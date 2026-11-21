@@ -14,6 +14,8 @@ import {
 } from '@/pages/worker/sections';
 import { DocumentsSummary } from '@/components/DocumentsSummary';
 import { PortfolioSection } from '@/pages/worker/Portfolio';
+import { FindingsPanel, type Review } from '@/components/ReviewPanel';
+import { api } from '@/lib/api';
 
 export default function WorkerProfilePage() {
   const q = useWorkerProfile();
@@ -52,6 +54,7 @@ export default function WorkerProfilePage() {
                 </div>
               </div>
             </Card>
+            <FindingsPanel title="Look over my profile" intro="Checks your headline, biography, skills, work history and CV details, and tells you what to fix first." run={() => api<{ review: Review }>('/review/profile')} />
             <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
               <div>
                 <h2 className="text-lg font-bold">Your CV</h2>
