@@ -10,11 +10,14 @@ import { useJob, type JobWithViewer } from '@/lib/jobs';
 import { STATUS_META, type AppStatus } from '@/lib/applications';
 import { useMyMatch } from '@/lib/matching';
 import { MatchPanel } from '@/components/MatchPanel';
+import { EmployerRating, SalaryGuideCard } from '@/components/JobInsights';
 import { TrainingSuggestions } from '@/components/TrainingSuggestions';
 import { ReportButton } from '@/components/ReportButton';
 import { useAuth } from '@/app/auth';
 import { api, ApiError } from '@/lib/api';
-import { deadlineText, EDU_LABEL, formatPlace, formatSalary, MODE_LABEL, TYPE_LABEL } from '@/lib/format';
+import { declinedFrom, type Declined } from '@/lib/cvCheck';
+import { documentsRequiredFrom, type DocumentsRequired } from '@/lib/documents';
+import { deadlineText, EDU_LABEL, formatPlace, formatSalary, MODE_LABEL, OPEN_TO_LABEL, RECRUITMENT_LABEL, SENIORITY_LABEL, TYPE_LABEL, WORKPLACE_LABEL, BENEFIT_LABEL } from '@/lib/format';
 
 function Fact({ icon: Icon, label, children }: { icon: typeof Clock; label: string; children: React.ReactNode }) {
   return (
@@ -39,11 +42,13 @@ function ApplyPanel({ job, open }: { job: JobWithViewer; open: boolean }) {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const refresh = () => Promise.all(['job', 'my-applications', 'summary', 'saved-jobs'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
-  const fail = (e: unknown) => setError(e instanceof ApiError ? e.message : 'Could not reach the server. Try again.');
+  const [declined, setDeclined] = useState<Declined | null>(null);
+  const [needDocs, setNeedDocs] = useState<DocumentsRequired | null>(null);
+  const fail = (e: unknown) => { const d = declinedFrom(e); const n = documentsRequiredFrom(e); setDeclined(d); setNeedDocs(n); setError(d || n ? null : e instanceof ApiError ? e.message : 'Could not reach the server. Try again.'); };
 
   const apply = useMutation({
     mutationFn: () => api(`/jobs/${job.id}/apply`, { method: 'POST', body: note.trim() ? { coverNote: note.trim() } : {} }),
-    onSuccess: () => { setError(null); void refresh(); },
+    onSuccess: () => { setError(null); setDeclined(null); setNeedDocs(null); void refresh(); },
     onError: fail,
   });
   const save = useMutation({
@@ -79,6 +84,21 @@ function ApplyPanel({ job, open }: { job: JobWithViewer; open: boolean }) {
           {job.viewer?.saved ? 'Remove from saved jobs' : 'Save for later'}
         </Button>
       )}
+      {declined && (
+        <Alert tone="danger">
+          <p className="font-semibold">{declined.message}</p>
+          {declined.reasons.length > 0 && <ul className="mt-1 list-disc pl-5">{declined.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+          {declined.fix.map((f) => <p key={f} className="mt-1">{f}</p>)}
+          <LinkButton to="/profile" variant="outline" size="sm" className="mt-2">Go to my profile</LinkButton>
+        </Alert>
+      )}
+      {needDocs && (
+        <Alert tone="warning">
+          <p className="font-semibold">Send your documents first</p>
+          <p className="mt-1">To apply for jobs you need to send: {needDocs.missing.join(', ')}.</p>
+          <LinkButton to="/documents" variant="accent" size="sm" className="mt-2">Upload my documents</LinkButton>
+        </Alert>
+      )}
       {error && <Alert tone="danger">{error}</Alert>}
     </div>
   );
@@ -102,7 +122,7 @@ export default function JobDetail() {
     );
   }
   const job = q.data!;
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency);
+  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.payBasis);
   const deadline = deadlineText(job.deadline);
   const required = job.allSkills.filter((s) => s.importance === 'REQUIRED');
   const preferred = job.allSkills.filter((s) => s.importance === 'PREFERRED');
@@ -129,6 +149,8 @@ export default function JobDetail() {
       <div className="mt-3 flex flex-wrap gap-1.5">
         <EmployerKindBadge type={job.organization.type} label={job.vacancyLabel} />
         <Badge tone="accent">{TYPE_LABEL[job.employmentType]}</Badge>
+        {job.seniority && <Badge>{SENIORITY_LABEL[job.seniority]}</Badge>}
+        {job.openTo?.map((g) => <Badge key={g} tone="success">Welcomes: {OPEN_TO_LABEL[g]}</Badge>)}
         <Badge>{MODE_LABEL[job.workMode]}</Badge>
         <Badge>{job.category.name}</Badge>
       </div>
@@ -137,6 +159,9 @@ export default function JobDetail() {
         <Fact icon={MapPin} label="Location">{formatPlace(job.locationPath, job.workMode === 'REMOTE')}</Fact>
         <Fact icon={Wallet} label="Salary per month">{salary ?? 'Not stated'}</Fact>
         <Fact icon={Users} label="Vacancies">{job.vacancies}</Fact>
+        {job.workplace && <Fact icon={Briefcase} label="Where the work is done">{WORKPLACE_LABEL[job.workplace]}</Fact>}
+        {job.recruitmentMethod && <Fact icon={Briefcase} label="How people are selected">{RECRUITMENT_LABEL[job.recruitmentMethod]}</Fact>}
+        {job.benefitTags && job.benefitTags.length > 0 && <Fact icon={Briefcase} label="Comes with">{job.benefitTags.map((b) => BENEFIT_LABEL[b]).join(', ')}</Fact>}
         {job.referenceNumber && <Fact icon={Briefcase} label="Vacancy reference">{job.referenceNumber}</Fact>}
         <Fact icon={Clock} label="Application deadline"><span className={deadline.urgent ? 'text-warning' : ''}>{deadline.text}</span></Fact>
         <Fact icon={CalendarClock} label="Experience">{job.minExperienceYears === null ? 'No minimum required' : `${job.minExperienceYears}+ year${job.minExperienceYears === 1 ? '' : 's'}`}</Fact>
@@ -144,6 +169,8 @@ export default function JobDetail() {
         {job.languages.length > 0 && <Fact icon={Languages} label="Languages">{job.languages.join(', ')}</Fact>}
         {job.schedule && <Fact icon={Clock} label="Schedule">{job.schedule}</Fact>}
       </Card>
+
+      <div className="mt-6"><SalaryGuideCard categoryId={job.category.id} locationId={job.locationPath.length ? job.locationPath[job.locationPath.length - 1].id : null} salaryMin={job.salaryMin} salaryMax={job.salaryMax} /></div>
 
       <section className="mt-8">
         <h2 className="text-xl font-bold">About the job</h2>
@@ -180,6 +207,7 @@ export default function JobDetail() {
 
       <section className="mt-8">
         <h2 className="text-xl font-bold">About {job.organization.name}</h2>
+        <EmployerRating organizationId={job.organization.id} />
         <p className="mt-2 text-muted">{job.organization.description ?? 'This employer has not added a description yet.'}</p>
         {job.organization.website && <a className="mt-1 inline-block text-sm text-accent hover:underline" href={job.organization.website} target="_blank" rel="noopener noreferrer nofollow">{job.organization.website}</a>}
       </section>

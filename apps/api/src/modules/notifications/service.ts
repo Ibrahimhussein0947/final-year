@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { notifier } from '../../integrations/notify';
 import { emitToUser } from '../../realtime';
+import { sendTelegramIfAllowed, telegramTextFor } from './telegram';
 
 export type NotificationType =
   | 'application.received'
@@ -10,6 +11,7 @@ export type NotificationType =
   | 'application.status'
   | 'interview.scheduled'
   | 'interview.cancelled'
+  | 'interview.responded'
   | 'interview.reminder'
   | 'message.new'
   | 'job.recommended'
@@ -18,7 +20,21 @@ export type NotificationType =
   | 'application.auto'
   | 'job.invitation'
   | 'verification.reviewed'
-  | 'job.reviewed';
+  | 'job.reviewed'
+  | 'plan.request_decided'
+  | 'cv.accepted'
+  | 'offer.made'
+  | 'offer.responded'
+  | 'offer.withdrawn'
+  | 'offer.expired'
+  | 'offer.started'
+  | 'offer.reminder'
+  | 'appeal.received'
+  | 'appeal.answered'
+  | 'service.inquiry'
+  | 'service.inquiry_accepted'
+  | 'service.inquiry_declined'
+  | 'service.removed';
 
 const SMS_PER_DAY = 5;
 
@@ -28,6 +44,8 @@ const SMS_PER_DAY = 5;
  */
 export function smsTextFor(type: NotificationType, payload: Record<string, unknown>): string | null {
   if (type === 'interview.reminder' && payload.audience === 'worker') return 'EthioTalent AI: you have an interview coming up. Open the app for the time and place.';
+  if (type === 'offer.made') return 'EthioTalent AI: you have a job offer. Open the app to read it and answer.';
+  if (type === 'offer.reminder' && payload.audience === 'worker') return 'EthioTalent AI: a reminder about your job offer. Open the app for the date.';
   if (type === 'interview.scheduled') return 'EthioTalent AI: an interview has been scheduled for you. Open the app for the details.';
   if (type === 'application.status' && ['SHORTLISTED', 'ACCEPTED', 'REJECTED'].includes(String(payload.status))) {
     return 'EthioTalent AI: the status of one of your applications has changed. Open the app to see it.';
@@ -55,6 +73,8 @@ export async function notify(userId: string, type: NotificationType, payload: Pr
     emitToUser(userId, 'notification:new', { id: n.id, type, payload, readAt: null, createdAt: n.createdAt });
     const sms = smsTextFor(type, (payload ?? {}) as Record<string, unknown>);
     if (sms) await sendSmsIfAllowed(userId, sms);
+    const tg = telegramTextFor(type, (payload ?? {}) as Record<string, unknown>);
+    if (tg) await sendTelegramIfAllowed(userId, tg);
   } catch (err) {
     logger.error({ err, type }, 'notification delivery failed');
   }

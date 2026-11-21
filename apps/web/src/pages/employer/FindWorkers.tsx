@@ -9,6 +9,7 @@ import { MatchBadge, MatchPanel } from '@/components/MatchPanel';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { SectorRequirements } from '@/pages/employer/SectorRequirements';
 import { cn } from '@/lib/cn';
+import { TrustBadge } from '@/components/TrustBadge';
 import { EDU_LABEL } from '@/lib/format';
 import { useMyJobs } from '@/lib/jobs';
 import { type JobRequirement } from '@/lib/criteria';
@@ -73,6 +74,7 @@ function WorkerCard({ w, jobId, selected, onToggle }: { w: TalentItem; jobId: st
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Link to={`/employer/workers/${w.workerId}${jobId ? `?job=${jobId}` : ''}`} className="text-lg font-semibold hover:text-accent">{w.name}</Link>
+              <TrustBadge trust={w.trust} />
               {w.match && <MatchBadge match={w.match} />}
             </div>
             <p className="text-sm text-muted">{[w.headline ?? w.occupation, `${w.yearsExperience} yr experience`, w.location, AVAILABILITY_LABEL[w.availability]].filter(Boolean).join(' · ')}</p>
@@ -96,7 +98,7 @@ function WorkerCard({ w, jobId, selected, onToggle }: { w: TalentItem; jobId: st
   );
 }
 
-const blank = { q: '', categoryId: '', regionId: '', zoneId: '', minYears: '', availableWithin: '', minEducation: '', verified: false, jobId: '', skillsMode: 'all' };
+const blank = { q: '', categoryId: '', regionId: '', zoneId: '', minYears: '', availableWithin: '', minEducation: '', verified: false, minTrust: '', jobId: '', skillsMode: 'all' };
 
 /** Employer search for workers: filter by words, sector, skills, place, experience, availability, education, verified evidence and sector answers. */
 export default function FindWorkersPage() {
@@ -123,6 +125,7 @@ export default function FindWorkersPage() {
     if (f.availableWithin) sp.set('availableWithin', f.availableWithin);
     if (f.minEducation) sp.set('minEducation', f.minEducation);
     if (f.verified) sp.set('verified', 'true');
+    if (f.minTrust) sp.set('minTrust', f.minTrust);
     if (f.jobId) sp.set('jobId', f.jobId);
     if (crit.length) sp.set('criteria', JSON.stringify(crit.map((c) => ({ criterionId: c.criterionId, value: c.value }))));
     setApplied(sp.toString());
@@ -167,6 +170,13 @@ export default function FindWorkersPage() {
               <SelectField label="Education at least" value={f.minEducation} onChange={(e) => set('minEducation', e.target.value)}>
                 <option value="">No minimum</option>
                 {Object.entries(EDU_LABEL).filter(([k]) => k !== 'NONE').map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </SelectField>
+              <SelectField label="Checked by an administrator" value={f.minTrust} onChange={(e) => set('minTrust', e.target.value)}>
+                <option value="">Any</option>
+                <option value="1">ID verified or more</option>
+                <option value="2">Verified or more (ID plus one proof)</option>
+                <option value="3">Trusted or more</option>
+                <option value="4">Highly trusted only</option>
               </SelectField>
               <label className="flex items-center gap-2 self-end pb-3 text-sm font-medium"><input type="checkbox" checked={f.verified} onChange={(e) => set('verified', e.target.checked)} />Has something verified by an administrator</label>
             </div>

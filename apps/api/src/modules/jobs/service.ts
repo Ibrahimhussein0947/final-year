@@ -1,4 +1,7 @@
+import { assertOrgDocuments } from '../documents/status';
 import { typesInGroup } from '../hiring/catalog';
+import { segmentFilter } from './segments';
+import { DAYS_PER_MONTH, HOURS_PER_DAY, WEEKS_PER_MONTH } from './classification';
 import { getPolicy, liveJobProblems } from '../hiring/service';
 import { jobCriteriaView, validateJobCriteria } from '../criteria/service';
 import { detectDiscrimination, discriminationMessage } from '../criteria/discrimination';
@@ -7,6 +10,7 @@ import { env } from '../../config/env';
 import { prisma } from '../../lib/prisma';
 import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { jobFingerprint, similarity } from './similarity';
+import { scanJobText } from './scamCheck';
 import { queueJobEmbedding } from '../matching/embeddings';
 import { notifyNewJobMatches } from '../matching/service';
 import { notifySavedSearchMatches } from './savedSearches';
@@ -54,6 +58,12 @@ export function toListItem(j: JobFull) {
     category: { id: j.category.id, slug: j.category.slug, name: j.category.nameEn },
     employmentType: j.employmentType,
     workMode: j.workMode,
+    seniority: j.seniority,
+    openTo: j.openTo,
+    workplace: j.workplace,
+    recruitmentMethod: j.recruitmentMethod,
+    payBasis: j.payBasis,
+    benefitTags: j.benefitTags,
     salaryMin: j.salaryMin,
     salaryMax: j.salaryMax,
     currency: j.currency,
@@ -175,6 +185,13 @@ export async function updateJob(orgId: string, jobId: string, input: JobUpdateIn
       const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { verificationStatus: true } });
       if (org.verificationStatus !== 'VERIFIED') next.status = 'PENDING_REVIEW';
     }
+    // Rewording a live job into a scam is the obvious loophole, so edited text is screened again.
+    if (job.status === 'ACTIVE' && scanJobText({
+      title: data.title ?? job.title,
+      description: data.description ?? job.description,
+      benefits: data.benefits !== undefined ? data.benefits : job.benefits,
+      schedule: data.schedule !== undefined ? data.schedule : job.schedule,
+    }).flagged) next.status = 'PENDING_REVIEW';
   }
   await prisma.$transaction(async (tx) => {
     await tx.job.update({ where: { id: jobId }, data: next });
@@ -196,6 +213,8 @@ export async function updateJob(orgId: string, jobId: string, input: JobUpdateIn
 export async function publishJob(orgId: string, userId: string, jobId: string, confirmNotDuplicate = false) {
   // Plan limit first: no point checking the rest of a job the organization may not publish.
   await assertCanPublish(orgId, jobId);
+  // The documents an organization of this type has to send before it posts jobs.
+  await assertOrgDocuments(orgId);
   const job = await prisma.job.findFirst({ where: { id: jobId, organizationId: orgId, status: { not: 'REMOVED' } }, include: { skills: true, organization: true } });
   if (!job) throw notFound('Job not found');
   if (!['DRAFT', 'CLOSED'].includes(job.status)) throw conflict(`Job is already ${job.status.toLowerCase().replace('_', ' ')}`);
@@ -232,7 +251,11 @@ export async function publishJob(orgId: string, userId: string, jobId: string, c
     where: { descriptionHash: job.descriptionHash, organizationId: { not: orgId }, status: { in: ['ACTIVE', 'PENDING_REVIEW'] } },
   });
 
-  const needsReview = copied > 0 || (env.reviewUnverifiedJobs && job.organization.verificationStatus !== 'VERIFIED');
+  // Scam screening: risky wording holds the job for an administrator, whatever the organization's verification status.
+  const scam = scanJobText(job);
+  if (scam.flagged) logger.warn({ jobId, orgId, score: scam.score, signals: scam.signals.map((s) => s.code) }, 'job held for scam review');
+
+  const needsReview = copied > 0 || scam.flagged || (env.reviewUnverifiedJobs && job.organization.verificationStatus !== 'VERIFIED');
   const status = needsReview ? 'PENDING_REVIEW' : 'ACTIVE';
   const firstPublish = !job.publishedAt;
   await prisma.job.update({ where: { id: jobId }, data: { status, publishedAt: job.publishedAt ?? new Date() } });
@@ -241,7 +264,7 @@ export async function publishJob(orgId: string, userId: string, jobId: string, c
     await notifyNewJobMatches(jobId).catch((err) => logger.warn({ err: String(err), jobId }, 'job match alerts failed'));
     await notifySavedSearchMatches(jobId).catch((err) => logger.warn({ err: String(err), jobId }, 'saved search alerts failed'));
   }
-  return { status, flaggedAsCopy: copied > 0, userId };
+  return { status, flaggedAsCopy: copied > 0, flaggedAsRisky: scam.flagged, userId };
 }
 
 export async function setJobClosed(orgId: string, jobId: string, status: 'CLOSED' | 'FILLED') {
@@ -304,12 +327,28 @@ export async function searchJobs(q: ListQuery, extraWhere?: Prisma.JobWhereInput
   if (q.category) and.push({ category: { slug: q.category } });
   if (q.type) and.push({ employmentType: q.type });
   if (q.mode) and.push({ workMode: q.mode });
-  if (q.minSalary) and.push({ salaryMax: { gte: q.minSalary } });
+  if (q.minSalary) {
+    // The minimum is per month. Daily, weekly and hourly pay is compared after bringing it to a month; pay that is not a fixed
+    // amount over time (per project, commission, negotiable ...) is not compared here.
+    const m = q.minSalary;
+    and.push({
+      OR: [
+        { OR: [{ payBasis: null }, { payBasis: 'MONTHLY' }], salaryMax: { gte: m } },
+        { payBasis: 'WEEKLY', salaryMax: { gte: Math.ceil(m / WEEKS_PER_MONTH) } },
+        { payBasis: 'DAILY', salaryMax: { gte: Math.ceil(m / DAYS_PER_MONTH) } },
+        { payBasis: 'HOURLY', salaryMax: { gte: Math.ceil(m / (HOURS_PER_DAY * DAYS_PER_MONTH)) } },
+      ],
+    });
+  }
+  if (q.workplace) and.push({ workplace: q.workplace });
+  if (q.recruitmentMethod) and.push({ recruitmentMethod: q.recruitmentMethod });
+  if (q.payBasis) and.push({ payBasis: q.payBasis });
+  if (q.benefit) and.push({ benefitTags: { has: q.benefit } });
   if (q.hasSalary === 'true') and.push({ OR: [{ salaryMin: { not: null } }, { salaryMax: { not: null } }] });
   if (q.flexible === 'true') {
     and.push({
       OR: [
-        { employmentType: { in: ['PART_TIME', 'TEMPORARY', 'DAILY', 'SEASONAL', 'FREELANCE'] } },
+        { employmentType: { in: ['PART_TIME', 'TEMPORARY', 'DAILY', 'SEASONAL', 'FREELANCE', 'CASUAL', 'GIG', 'ON_CALL'] } },
         { workMode: { in: ['REMOTE', 'HYBRID'] } },
         { schedule: { contains: 'flexib', mode: 'insensitive' } },
       ],
@@ -325,6 +364,9 @@ export async function searchJobs(q: ListQuery, extraWhere?: Prisma.JobWhereInput
   if (q.language) and.push({ OR: [{ languages: { isEmpty: true } }, { languages: { has: q.language } }, { languages: { has: q.language.charAt(0).toUpperCase() + q.language.slice(1).toLowerCase() } }] });
   if (q.skills.length) and.push({ skills: { some: { skillId: { in: q.skills } } } });
   if (q.verifiedOnly === 'true') and.push({ organization: { verificationStatus: 'VERIFIED' } });
+  if (q.segment) and.push(segmentFilter(q.segment));
+  if (q.seniority) and.push({ seniority: q.seniority });
+  if (q.openTo) and.push({ openTo: { has: q.openTo } });
   if (q.employerGroup) and.push({ organization: { type: { in: typesInGroup(q.employerGroup) } } });
 
   // A place filter matches the place itself or anything inside it (up to 4 levels deep).

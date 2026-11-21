@@ -3,14 +3,16 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { audit } from '../../lib/audit';
 import { PHONE_REGEX, normalizePhone, stripPhoneFormatting } from '../../lib/security';
-import { badRequest, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { aiClient } from '../../integrations/aiClient';
 import { notifier } from '../../integrations/notify';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validateBody } from '../../middleware/common';
 import { aiPerformance, nationalAnalytics, K_MIN } from '../analytics/service';
+import { searchFairness } from '../analytics/fairness';
+import { hiringPerformance } from '../analytics/performance';
 import * as svc from './service';
-import { adminListPlans, adminSubscriptions, assignPlan, assignSchema, cancelSubscription, createPlan, planCreateSchema, planUpdateSchema, updatePlan } from '../subscriptions/service';
+import { adminListPlans, adminPlanRequests, adminSubscriptions, approvePlanRequest, assignPlan, declinePlanRequest, planDecisionSchema, assignSchema, cancelSubscription, createPlan, planCreateSchema, planUpdateSchema, updatePlan } from '../subscriptions/service';
 import { listPolicies, ORGANIZATION_TYPES, policyUpdateSchema, updatePolicy } from '../hiring/service';
 import { adminOrganizations, orgListSchema } from '../hiring/directory';
 import { adminListDefinitions, createDefinition, createDefinitionSchema, updateDefinition, updateDefinitionSchema } from '../criteria/admin';
@@ -119,6 +121,20 @@ export function adminRouter() {
     await audit(req, req.user!.id, 'admin.plan_updated', 'SubscriptionPlan', plan.id, { fields: Object.keys(req.body) });
     res.json({ plan });
   });
+  router.get('/plan-requests', async (req, res) => {
+    const status = parse(z.enum(['PENDING', 'APPROVED', 'DECLINED', 'CANCELLED']).default('PENDING'), req.query.status);
+    res.json(await adminPlanRequests(status));
+  });
+  router.post('/plan-requests/:id/approve', validateBody(planDecisionSchema), async (req, res) => {
+    const out = await approvePlanRequest(req.user!.id, idOf(req), req.body);
+    await audit(req, req.user!.id, 'admin.plan_request_approved', 'Organization', out.organizationId, { plan: out.planName });
+    res.json({ ok: true });
+  });
+  router.post('/plan-requests/:id/decline', validateBody(planDecisionSchema), async (req, res) => {
+    const out = await declinePlanRequest(req.user!.id, idOf(req), req.body);
+    await audit(req, req.user!.id, 'admin.plan_request_declined', 'Organization', out.organizationId, { plan: out.planName });
+    res.json({ ok: true });
+  });
   router.get('/subscriptions', async (req, res) => {
     const q = parse(z.object({ q: z.string().trim().max(80).optional(), ...page }), req.query);
     res.json(await adminSubscriptions(q));
@@ -136,7 +152,7 @@ export function adminRouter() {
 
   // Verification requests
   router.get('/verifications', async (req, res) => {
-    const q = parse(z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).default('PENDING'), kind: z.enum(['EMPLOYER', 'QUALIFICATION', 'SKILL']).optional() }), req.query);
+    const q = parse(z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).default('PENDING'), kind: z.enum(['EMPLOYER', 'QUALIFICATION', 'SKILL', 'IDENTITY']).optional() }), req.query);
     res.json({ items: await svc.listVerifications(q) });
   });
   router.post('/verifications/:id/review', validateBody(z.object({ decision: z.enum(['APPROVED', 'REJECTED']), note }).strict()), async (req, res) => {
@@ -150,7 +166,7 @@ export function adminRouter() {
     const q = parse(z.object({ status: z.enum(['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED']).optional() }), req.query);
     res.json({ items: await svc.listReports(q.status) });
   });
-  router.post('/moderation/reports/:id/resolve', validateBody(z.object({ action: z.enum(['DISMISS', 'NO_ACTION', 'REMOVE_JOB', 'SUSPEND_USER']), note }).strict()), async (req, res) => {
+  router.post('/moderation/reports/:id/resolve', validateBody(z.object({ action: z.enum(['DISMISS', 'NO_ACTION', 'REMOVE_JOB', 'REMOVE_SERVICE', 'SUSPEND_USER']), note }).strict()), async (req, res) => {
     const r = await svc.resolveReport(req.user!.id, idOf(req), req.body.action, req.body.note ?? null);
     await audit(req, req.user!.id, `admin.report_${req.body.action.toLowerCase()}`, 'Report', r.id, { note: req.body.note ?? null });
     res.json(r);
@@ -268,9 +284,48 @@ export function adminRouter() {
     res.json(await svc.listAudit(q));
   });
 
+  // Places: HDX data gives regions, zones and woredas in English only; kebeles and the Amharic / Afaan Oromoo labels are added here.
+  const placeName = z.string().trim().min(1).max(120);
+  const optionalName = z.string().trim().max(120).transform((v) => v || null).nullable().optional();
+  const CHILD_LEVEL = { REGION: 'ZONE', ZONE: 'WOREDA', WOREDA: 'KEBELE' } as const;
+  router.post('/locations', async (req, res) => {
+    const body = parse(z.object({ parentId: uuid, nameEn: placeName, nameAm: optionalName, nameOm: optionalName }), req.body);
+    const parent = await prisma.location.findUnique({ where: { id: body.parentId }, select: { id: true, level: true } });
+    if (!parent) throw badRequest('Unknown parent place', { parentId: ['Choose a valid parent'] });
+    if (parent.level === 'KEBELE') throw badRequest('A kebele cannot contain other places', { parentId: ['Kebele is the smallest level'] });
+    const exists = await prisma.location.findUnique({ where: { parentId_nameEn: { parentId: parent.id, nameEn: body.nameEn } }, select: { id: true } });
+    if (exists) throw conflict('That place already exists here');
+    const created = await prisma.location.create({
+      data: { level: CHILD_LEVEL[parent.level], parentId: parent.id, nameEn: body.nameEn, nameAm: body.nameAm ?? null, nameOm: body.nameOm ?? null },
+      select: { id: true, level: true, nameEn: true, nameAm: true, nameOm: true, parentId: true },
+    });
+    await audit(req, req.user!.id, 'admin.location_added', 'Location', created.id, { level: created.level, name: created.nameEn });
+    res.status(201).json({ location: created });
+  });
+  router.patch('/locations/:id', async (req, res) => {
+    const id = idOf(req);
+    const body = parse(z.object({ nameEn: placeName.optional(), nameAm: optionalName, nameOm: optionalName }).refine((b) => Object.keys(b).length > 0, 'Nothing to change'), req.body);
+    const current = await prisma.location.findUnique({ where: { id }, select: { parentId: true } });
+    if (!current) throw notFound();
+    if (body.nameEn && current.parentId) {
+      const clash = await prisma.location.findFirst({ where: { parentId: current.parentId, nameEn: body.nameEn, NOT: { id } }, select: { id: true } });
+      if (clash) throw conflict('Another place here already has that name');
+    }
+    const updated = await prisma.location.update({ where: { id }, data: body, select: { id: true, level: true, nameEn: true, nameAm: true, nameOm: true, parentId: true } });
+    await audit(req, req.user!.id, 'admin.location_updated', 'Location', id, { fields: Object.keys(body) });
+    res.json({ location: updated });
+  });
+
   // Analytics and reports
   router.get('/analytics/national', async (_req, res) => {
     res.json(await nationalAnalytics());
+  });
+  router.get('/analytics/performance', async (req, res) => {
+    const days = parse(z.coerce.number().pipe(z.union([z.literal(30), z.literal(90), z.literal(365)])).default(90), req.query.days);
+    res.json(await hiringPerformance(days));
+  });
+  router.get('/analytics/search-fairness', async (_req, res) => {
+    res.json(await searchFairness());
   });
   router.get('/analytics/recommendations', async (_req, res) => {
     res.json(await aiPerformance());

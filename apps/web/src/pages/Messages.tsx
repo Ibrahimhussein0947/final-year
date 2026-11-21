@@ -25,6 +25,7 @@ function ConversationList({ items, activeId }: { items: ConversationItem[]; acti
               {c.unread > 0 && <Badge tone="accent">{c.unread}</Badge>}
             </div>
             {c.job && <p className="truncate text-xs text-muted">{c.job.title}{c.beforeApplying ? ' · before applying' : ''}</p>}
+            {c.service && <p className="truncate text-xs text-muted">Service: {c.service.title}</p>}
             {c.lastMessage && (
               <p className={cn('mt-0.5 truncate text-xs', c.unread ? 'text-text' : 'text-muted')}>
                 {c.lastMessage.mine ? 'You: ' : ''}{c.lastMessage.preview} · {timeAgo(c.lastMessage.createdAt)}
@@ -113,6 +114,7 @@ function Thread({ id, conv }: { id: string; conv?: ConversationItem }) {
       <header className="border-b border-border px-4 py-3">
         <Link to="/messages" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-accent md:hidden"><ArrowLeft className="h-3 w-3" aria-hidden />All conversations</Link>
         <h2 className="font-semibold">{conv?.with?.name ?? 'Conversation'}</h2>
+        {conv?.service && <p className="text-xs text-muted">About the service: {conv.service.title}</p>}
         {conv?.job && <p className="text-xs text-muted">About: {conv.job.title}{conv.beforeApplying ? ' · before applying: nothing about the worker is shared until they apply' : ''}</p>}
       </header>
 

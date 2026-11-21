@@ -26,7 +26,7 @@ def create_app(settings: Settings | None = None, backend: EmbeddingBackend | Non
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         started = time.time()
-        b = backend or SentenceTransformerBackend(cfg.model_name)
+        b = backend or SentenceTransformerBackend(cfg.model_name, cfg.text_prefix)
         state["embedder"] = CachedEmbedder(b, cfg.cache_size)
         state["backend"] = b
         log.info("model %s ready (dim %s) in %.1fs", b.name, b.dim, time.time() - started)

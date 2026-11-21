@@ -21,10 +21,12 @@ class EmbeddingBackend(Protocol):
 class SentenceTransformerBackend:
     """Real multilingual sentence embeddings (Sentence Transformers / PyTorch, CPU)."""
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, prefix: str = ""):
         from sentence_transformers import SentenceTransformer  # imported lazily: heavy
 
         self.name = model_name
+        # Some models (the E5 family) must be told what a text is for, by a short prefix such as "query: ".
+        self.prefix = prefix
         self._model = SentenceTransformer(model_name, device="cpu")
         self.dim = int(self._model.get_sentence_embedding_dimension())
         self.max_tokens = int(self._model.max_seq_length)
@@ -32,7 +34,7 @@ class SentenceTransformerBackend:
 
     def encode(self, texts: list[str]) -> np.ndarray:
         with self._lock:
-            vecs = self._model.encode(texts, normalize_embeddings=True, convert_to_numpy=True, batch_size=32, show_progress_bar=False)
+            vecs = self._model.encode([self.prefix + t for t in texts], normalize_embeddings=True, convert_to_numpy=True, batch_size=32, show_progress_bar=False)
         return vecs.astype(np.float32)
 
 

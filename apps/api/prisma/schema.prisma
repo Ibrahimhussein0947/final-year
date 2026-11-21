@@ -53,6 +53,71 @@ enum EmploymentType {
   INTERNSHIP
   SEASONAL
   DAILY
+  PERMANENT
+  CASUAL
+  APPRENTICESHIP
+  VOLUNTEER
+  GIG
+  ON_CALL
+}
+
+// How the pay of a job is counted. Null means the employer did not say (older jobs): treated as monthly.
+enum PayBasis {
+  MONTHLY
+  WEEKLY
+  DAILY
+  HOURLY
+  PER_PROJECT
+  COMMISSION
+  PIECE_RATE
+  PERFORMANCE
+  NEGOTIABLE
+  UNPAID
+}
+
+// Where the work is done. One of the independent dimensions of a job, next to its occupation and employment type.
+enum Workplace {
+  OFFICE
+  HOME
+  FACTORY
+  FARM
+  HEALTH_FACILITY
+  CONSTRUCTION_SITE
+  OUTDOOR
+  INDUSTRIAL_FACILITY
+  VEHICLE
+  SHIP
+  AIRCRAFT
+  LABORATORY
+  RETAIL_SHOP
+  MULTIPLE_SITES
+  FULLY_REMOTE
+}
+
+// How the employer selects people. Describes the process to applicants; it does not change what the platform enforces.
+enum RecruitmentMethod {
+  OPEN
+  INTERNAL
+  REFERRAL
+  DIRECT
+  COMPETITIVE
+  MASS
+  EMERGENCY
+  SEASONAL
+  CAMPUS
+  AGENCY
+}
+
+// How senior a position is. Null means the employer did not say; matching does not use it.
+enum JobSeniority {
+  ENTRY
+  JUNIOR
+  INTERMEDIATE
+  SENIOR
+  SPECIALIST
+  SUPERVISOR
+  MANAGER
+  EXECUTIVE
 }
 
 enum WorkMode {
@@ -140,6 +205,12 @@ enum InterviewMode {
   VIDEO
 }
 
+enum InterviewResponse {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
 enum InterviewStatus {
   SCHEDULED
   COMPLETED
@@ -160,6 +231,7 @@ enum FeedbackAction {
 }
 
 enum VerificationKind {
+  IDENTITY
   PHONE
   EMAIL
   EMPLOYER
@@ -177,6 +249,7 @@ enum RequestStatus {
 enum ReportTargetType {
   JOB
   USER
+  SERVICE
 }
 
 enum ReportStatus {
@@ -217,27 +290,37 @@ model User {
   autoApply          Boolean       @default(false) // opt-in: apply by itself to jobs that match well
   autoApplyMinScore  Int           @default(80)
   notifySms          Boolean       @default(false)
+  // Telegram alerts: linked by a one-time code the user sends to the bot, never by guessing from a phone number.
+  telegramChatId        String?   @unique
+  telegramLinkedAt      DateTime?
+  notifyTelegram        Boolean   @default(false)
+  telegramLinkHash      String?   @unique // sha256 of the pending link code; cleared once used
+  telegramLinkExpiresAt DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  workerProfile   WorkerProfile?
-  employerProfile EmployerProfile?
-  refreshTokens   RefreshToken[]
-  otpCodes        OtpCode[]
-  notifications   Notification[]
-  sentMessages    Message[]                 @relation("MessageSender")
-  conversations   ConversationParticipant[]
-  verifications   VerificationRequest[]     @relation("VerificationRequester")
-  reviewedVerifs  VerificationRequest[]     @relation("VerificationReviewer")
-  reportsFiled    Report[]                  @relation("ReportReporter")
-  reportsResolved Report[]                  @relation("ReportResolver")
-  auditLogs       AuditLog[]
-  files           FileAsset[]
-  reviewsWritten  Review[]                  @relation("ReviewAuthor")
-  reviewsReceived Review[]                  @relation("ReviewSubject")
-  jobsPosted      Job[]
-  invitationsSent JobInvitation[]           @relation("InvitationSender")
-  savedSearches   SavedSearch[]
+  workerProfile     WorkerProfile?
+  employerProfile   EmployerProfile?
+  refreshTokens     RefreshToken[]
+  otpCodes          OtpCode[]
+  notifications     Notification[]
+  sentMessages      Message[]                 @relation("MessageSender")
+  conversations     ConversationParticipant[]
+  verifications     VerificationRequest[]     @relation("VerificationRequester")
+  reviewedVerifs    VerificationRequest[]     @relation("VerificationReviewer")
+  reportsFiled      Report[]                  @relation("ReportReporter")
+  reportsResolved   Report[]                  @relation("ReportResolver")
+  auditLogs         AuditLog[]
+  files             FileAsset[]
+  documentChecks    DocumentCheck[]
+  reviewsWritten    Review[]                  @relation("ReviewAuthor")
+  reviewsReceived   Review[]                  @relation("ReviewSubject")
+  jobsPosted        Job[]
+  invitationsSent   JobInvitation[]           @relation("InvitationSender")
+  serviceInquiries  ServiceInquiry[]          @relation("InquiryCustomer")
+  serviceBlocksMade ServiceBlock[]            @relation("BlockProvider")
+  serviceBlocksOn   ServiceBlock[]            @relation("BlockCustomer")
+  savedSearches     SavedSearch[]
 
   @@index([role, status])
 }
@@ -284,9 +367,10 @@ model Location {
   parent          Location?        @relation("LocationTree", fields: [parentId], references: [id])
   children        Location[]       @relation("LocationTree")
 
-  workers       WorkerProfile[]
-  organizations Organization[]
-  jobs          Job[]
+  workers         WorkerProfile[]
+  organizations   Organization[]
+  jobs            Job[]
+  serviceListings ServiceListing[]
 
   @@unique([parentId, nameEn])
   @@index([level])
@@ -308,6 +392,7 @@ model Category {
 
   skills               Skill[]
   jobs                 Job[]
+  serviceListings      ServiceListing[]
   workers              WorkerProfile[]
   experiences          WorkExperience[]
   matchWeights         MatchWeights[]
@@ -317,6 +402,8 @@ model Category {
 }
 
 model Skill {
+  skillTests      SkillTest[]
+  portfolioItems  PortfolioItem[]
   trainingCourses TrainingCourseSkill[]
   id              String                @id @default(uuid())
   slug            String                @unique
@@ -329,10 +416,11 @@ model Skill {
   isActive        Boolean               @default(true)
   category        Category              @relation(fields: [categoryId], references: [id])
 
-  workerSkills WorkerSkill[]
-  jobSkills    JobSkill[]
-  relationsA   SkillRelation[] @relation("SkillA")
-  relationsB   SkillRelation[] @relation("SkillB")
+  workerSkills  WorkerSkill[]
+  jobSkills     JobSkill[]
+  relationsA    SkillRelation[] @relation("SkillA")
+  relationsB    SkillRelation[] @relation("SkillB")
+  serviceSkills ServiceSkill[]
 
   @@index([categoryId])
 }
@@ -352,6 +440,10 @@ model SkillRelation {
 // ───────────────────────── Worker side ─────────────────────────
 
 model WorkerProfile {
+  skillAttempts      SkillTestAttempt[]
+  portfolio          PortfolioItem[]
+  employerReviews    EmployerReview[]
+  offers             JobOffer[]
   id                 String             @id @default(uuid())
   userId             String             @unique
   headline           String?
@@ -388,6 +480,7 @@ model WorkerProfile {
   skills          WorkerSkill[]
   criteria        WorkerCriterion[]
   invitations     JobInvitation[]
+  serviceListings ServiceListing[]
   education       Education[]
   certifications  Certification[]
   experiences     WorkExperience[]
@@ -396,6 +489,8 @@ model WorkerProfile {
   recommendations Recommendation[]
   activities      ProfileActivity[]
   views           ProfileView[]
+  identity        WorkerIdentity?
+  cvChecks        CvCheck[]
 
   @@index([categoryId])
   @@index([locationId])
@@ -408,6 +503,10 @@ model WorkerSkill {
   proficiency Int            @default(3) // 1..5, enforced by CHECK in migration
   years       Int?
   source      EvidenceSource @default(SELF_REPORTED)
+  // Set when the worker passed the skill test. A different thing from VERIFIED (an administrator checked a document): it
+  // shows what they could answer on the day, and it is not used in the match score or the trust level.
+  testedScore Int?
+  testedAt    DateTime?
   worker      WorkerProfile  @relation(fields: [workerId], references: [id], onDelete: Cascade)
   skill       Skill          @relation(fields: [skillId], references: [id])
 
@@ -446,16 +545,19 @@ model Certification {
 }
 
 model WorkExperience {
-  id          String        @id @default(uuid())
-  workerId    String
-  title       String
-  employer    String?
-  categoryId  String?
-  startDate   DateTime
-  endDate     DateTime?
-  description String?
-  worker      WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  category    Category?     @relation(fields: [categoryId], references: [id])
+  id             String         @id @default(uuid())
+  workerId       String
+  title          String
+  employer       String?
+  categoryId     String?
+  startDate      DateTime
+  endDate        DateTime?
+  description    String?
+  // SELF_REPORTED until an administrator approves an experience letter for this job; only that sets VERIFIED.
+  source         EvidenceSource @default(SELF_REPORTED)
+  evidenceFileId String?
+  worker         WorkerProfile  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  category       Category?      @relation(fields: [categoryId], references: [id])
 
   @@index([workerId])
 }
@@ -464,6 +566,8 @@ model WorkExperience {
 
 model Organization {
   id                 String             @id @default(uuid())
+  reviews            EmployerReview[]
+  offers             JobOffer[]
   profileViews       ProfileView[]
   name               String
   type               OrganizationType
@@ -476,10 +580,12 @@ model Organization {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  location      Location?         @relation(fields: [locationId], references: [id])
+  location      Location?            @relation(fields: [locationId], references: [id])
   employers     EmployerProfile[]
   jobs          Job[]
   subscriptions Subscription[]
+  planRequests  PlanUpgradeRequest[]
+  legal         OrganizationLegal?
 
   @@index([verificationStatus])
 }
@@ -498,18 +604,25 @@ model EmployerProfile {
 // ───────────────────────── Jobs ─────────────────────────
 
 model Job {
-  id                     String          @id @default(uuid())
+  id                     String             @id @default(uuid())
   organizationId         String
   postedById             String
   title                  String
   description            String
   categoryId             String
   employmentType         EmploymentType
-  workMode               WorkMode        @default(ON_SITE)
+  workMode               WorkMode           @default(ON_SITE)
+  seniority              JobSeniority?
+  // Groups the employer says they welcome (disability, students, refugees ...). A welcome, never a restriction.
+  openTo                 String[]           @default([])
+  workplace              Workplace?
+  recruitmentMethod      RecruitmentMethod?
+  payBasis               PayBasis? // what salaryMin and salaryMax count: per month, per day, per hour ...
+  benefitTags            String[]           @default([]) // accommodation, transport, food, health insurance ...
   salaryMin              Int?
   salaryMax              Int?
-  currency               String          @default("ETB")
-  vacancies              Int             @default(1)
+  currency               String             @default("ETB")
+  vacancies              Int                @default(1)
   deadline               DateTime?
   startDate              DateTime?
   schedule               String?
@@ -520,17 +633,17 @@ model Job {
   locationId             String?
   lat                    Float?
   lng                    Float?
-  status                 JobStatus       @default(DRAFT)
+  status                 JobStatus          @default(DRAFT)
   descriptionHash        String
   // Vacancy reference number, as on a formal announcement. Required by the hiring rules of some organization types.
-  referenceNumber        String?         @db.VarChar(40)
+  referenceNumber        String?            @db.VarChar(40)
   embedding              Float[]
   embeddingModel         String?
   extractionApprovedAt   DateTime?
   publishedAt            DateTime?
   featuredAt             DateTime? // set while the employer has chosen to feature this job
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
   postedBy        User             @relation(fields: [postedById], references: [id])
@@ -579,6 +692,10 @@ model Application {
   history      ApplicationStatusHistory[]
   interviews   Interview[]
   conversation Conversation?
+  review       EmployerReview?
+  offer        JobOffer?
+  steps        HiringStep[]
+  appeal       ApplicationAppeal?
 
   @@unique([jobId, workerId])
   @@index([workerId, status])
@@ -599,16 +716,19 @@ model ApplicationStatusHistory {
 }
 
 model Interview {
-  id             String          @id @default(uuid())
+  id             String            @id @default(uuid())
   applicationId  String
   scheduledAt    DateTime
   mode           InterviewMode
   locationOrLink String?
-  status         InterviewStatus @default(SCHEDULED)
+  status         InterviewStatus   @default(SCHEDULED)
   remindedDayAt  DateTime? // reminder about a day ahead was sent
   remindedHourAt DateTime? // reminder about an hour ahead was sent
   videoRoom      String? // set when the platform made the meeting room (so a move can keep the same link)
-  application    Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  workerResponse InterviewResponse @default(PENDING) // the candidate's answer to this time; back to PENDING when the time is moved
+  respondedAt    DateTime?
+  declineNote    String? // optional reason the candidate gave, shown to the employer
+  application    Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
   @@index([status, scheduledAt])
@@ -635,6 +755,102 @@ model Review {
   subject   User     @relation("ReviewSubject", fields: [subjectId], references: [id])
 
   @@index([subjectId])
+}
+
+// A worker's rating of an employer after they were interviewed or hired. One per application, anonymous to the
+// employer (only totals are shown, and only once there are enough of them), and structured so there is no free text to moderate.
+enum OfferStatus {
+  OFFERED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN // the employer took it back, before or after it was accepted
+  EXPIRED // nobody answered by the respond-by date
+  STARTED
+}
+
+// The terms an employer puts in writing for someone they decided to hire (application ACCEPTED). The decision to hire stays
+// in the application workflow, with its hiring rules; the offer only records the start date, pay and the worker's answer.
+enum HiringStepKind {
+  WRITTEN_EXAM
+  PRACTICAL_TEST
+  SCORE_SHEET
+  REFERENCE_CHECKED
+  GUARANTOR_RECORDED
+}
+
+// What the employer did to select this candidate, recorded before the decision. ID_VERIFIED is not stored: it is read from the
+// candidate's approved ID document. `data` depends on the kind (see modules/hiring/steps.ts).
+model HiringStep {
+  id            String         @id @default(uuid())
+  applicationId String
+  kind          HiringStepKind
+  data          Json
+  recordedById  String
+  createdAt     DateTime       @default(now())
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, kind])
+}
+
+enum AppealOutcome {
+  UPHELD // the decision stands
+  REOPENED // the application goes back under review
+}
+
+// A rejected candidate asking the employer to look again, where the organization type allows it. One per application.
+model ApplicationAppeal {
+  id            String         @id @default(uuid())
+  applicationId String         @unique
+  reason        String
+  createdAt     DateTime       @default(now())
+  answeredAt    DateTime?
+  outcome       AppealOutcome?
+  reply         String?
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model JobOffer {
+  id               String        @id @default(uuid())
+  probationDays    Int? // stated probation period, within the organization type's limit
+  applicationId    String        @unique
+  organizationId   String
+  workerId         String
+  status           OfferStatus   @default(OFFERED)
+  salary           Int? // per month, in `currency`; null = as advertised
+  currency         String        @default("ETB")
+  startDate        DateTime      @db.Date
+  respondBy        DateTime      @db.Date
+  note             String? // written by the employer, shown only to the worker
+  respondedAt      DateTime?
+  startedAt        DateTime?
+  expiryRemindedAt DateTime?
+  startRemindedAt  DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  application      Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  worker           WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, status])
+  @@index([organizationId, status])
+  @@index([status, startDate])
+}
+
+model EmployerReview {
+  id             String        @id @default(uuid())
+  applicationId  String        @unique
+  organizationId String
+  workerId       String
+  application    Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  rating         Int // 1..5, enforced by CHECK in migration
+  paidOnTime     Boolean? // null = not applicable or not known yet
+  respectful     Boolean?
+  asDescribed    Boolean? // the job was as the advertisement said
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  worker         WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 // ───────────────────────── Matching ─────────────────────────
@@ -686,17 +902,20 @@ model RecommendationFeedback {
 // ───────────────────────── Communication ─────────────────────────
 
 model Conversation {
-  id            String                    @id @default(uuid())
+  id               String                    @id @default(uuid())
   // One conversation per application (NULLs are allowed many times, a given application only once).
   // The conversation is deleted together with its application.
-  applicationId String?                   @unique
+  applicationId    String?                   @unique
   // A conversation the worker started from an invitation, before applying. Stays attached once they apply.
-  invitationId  String?                   @unique
-  invitation    JobInvitation?            @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  application   Application?              @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  createdAt     DateTime                  @default(now())
-  participants  ConversationParticipant[]
-  messages      Message[]
+  invitationId     String?                   @unique
+  invitation       JobInvitation?            @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  // A conversation the provider opened by accepting a service inquiry.
+  serviceInquiryId String?                   @unique
+  serviceInquiry   ServiceInquiry?           @relation(fields: [serviceInquiryId], references: [id], onDelete: Cascade)
+  application      Application?              @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime                  @default(now())
+  participants     ConversationParticipant[]
+  messages         Message[]
 }
 
 model ConversationParticipant {
@@ -736,6 +955,104 @@ model Notification {
 }
 
 // ───────────────────────── Trust and safety ─────────────────────────
+
+// Does a worker's CV agree with the details they typed on their profile? ACCEPTED: nothing contradicts. DECLINED: a clear
+// contradiction (for example the CV is in someone else's name). UNCHECKED: the CV could not be read well enough to say.
+enum ProfileCheckOutcome {
+  ACCEPTED
+  DECLINED
+  UNCHECKED
+}
+
+// One comparison of a worker's CV with their profile. The text of the CV is not stored, only what was found and what differed.
+model CvCheck {
+  id            String              @id @default(uuid())
+  workerId      String
+  fileId        String? // the CV file that was compared
+  outcome       ProfileCheckOutcome
+  findings      Json // [{ code, severity: ok | info | warn | block, message, expected?, found? }]
+  profileHash   String // changes when the profile details that matter change, so the check is repeated
+  ocrConfidence Int?
+  createdAt     DateTime            @default(now())
+  worker        WorkerProfile       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, createdAt])
+}
+
+enum DocumentType {
+  BIRTH_CERTIFICATE
+  EDUCATION_CERTIFICATE
+  NATIONAL_ID // a worker's kebele ID, national (Fayda) ID, passport or driving licence
+  EXPERIENCE_LETTER
+  PROFESSIONAL_CERTIFICATE // a trade, competence (COC), training or professional certificate for one certification entry
+  BUSINESS_LICENSE
+  TIN_CERTIFICATE
+  COMMERCIAL_REGISTRATION
+  REPRESENTATIVE_ID // the ID of the person who manages the employer account
+  AUTHORIZATION_LETTER
+  ORG_REGISTRATION // NGO, cooperative, public enterprise or training-institution registration or accreditation
+  GOVERNMENT_LETTER
+  AGENCY_LICENSE
+}
+
+// How well what we could read from an uploaded document agrees with what the person typed. It says nothing about
+// whether the document is genuine: an administrator decides that. CONSISTENT: every required detail was found.
+// PARTIAL: the name matched but a supporting detail (institution, year, level) was not found. MISMATCH: a required
+// detail was not found in readable text. UNREADABLE: too little text could be read to say anything.
+enum DocumentCheckOutcome {
+  CONSISTENT
+  PARTIAL
+  MISMATCH
+  UNREADABLE
+}
+
+// Private details used to check documents. Never shown to employers or in search results.
+model WorkerIdentity {
+  workerId        String        @id
+  fatherName      String?
+  grandfatherName String?
+  idType          String? // KEBELE_ID | NATIONAL_ID | PASSPORT | DRIVING_LICENCE
+  idNumber        String?
+  dateOfBirth     DateTime?     @db.Date
+  verifiedAt      DateTime? // an administrator approved a birth certificate that matched these details
+  updatedAt       DateTime      @updatedAt
+  worker          WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+// The result of the automatic comparison for one uploaded document. The text read from the file is NOT stored, only
+// which details were found, so no copy of a certificate's contents is kept beyond the file itself.
+model DocumentCheck {
+  id              String               @id @default(uuid())
+  userId          String
+  fileId          String               @unique
+  docType         DocumentType
+  educationId     String? // the education entry an education certificate was uploaded for
+  experienceId    String? // the work entry an experience letter was uploaded for
+  certificationId String? // the certification entry a professional certificate was uploaded for
+  organizationId  String? // the organization an employer document was uploaded for
+  outcome         DocumentCheckOutcome
+  ocrConfidence   Int?
+  textChars       Int                  @default(0)
+  fields          Json // [{ field, expected, status: FOUND | NOT_FOUND, required }]
+  flags           Json // [{ code, level: info | warn, message }]
+  createdAt       DateTime             @default(now())
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  file            FileAsset            @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Legal details an employer types, so the uploaded business documents can be compared with them. Private to the
+// organization and administrators; never shown to workers.
+model OrganizationLegal {
+  organizationId     String       @id
+  tin                String? // tax identification number
+  licenseNumber      String?
+  licenseExpiresAt   DateTime?    @db.Date
+  registrationNumber String?
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
 
 model VerificationRequest {
   id             String           @id @default(uuid())
@@ -793,17 +1110,19 @@ model AuditLog {
 }
 
 model FileAsset {
-  id          String   @id @default(uuid())
-  ownerId     String
-  kind        FileKind
-  storagePath String
-  mime        String
-  sizeBytes   Int
-  sha256      String
-  createdAt   DateTime @default(now())
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid())
+  ownerId       String
+  kind          FileKind
+  storagePath   String
+  mime          String
+  sizeBytes     Int
+  sha256        String
+  createdAt     DateTime       @default(now())
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  documentCheck DocumentCheck?
 
   @@index([ownerId, kind])
+  @@index([sha256])
 }
 
 model Translation {
@@ -933,6 +1252,13 @@ model HiringPolicy {
   requireReference    Boolean          @default(false) // vacancy reference number
   requireDecisionNote Boolean          @default(false) // a written reason when accepting or rejecting
   requireInterview    Boolean          @default(false) // an interview must be recorded before hiring
+  // The recruitment METHODS of this kind of organization. Required steps must be recorded before a candidate can be accepted;
+  // suggested steps are only shown as good practice. Values: ID_VERIFIED, WRITTEN_EXAM, SCORE_SHEET, REFERENCE_CHECKED, GUARANTOR_RECORDED.
+  requiredSteps       String[]         @default([])
+  suggestedSteps      String[]         @default([])
+  panelSize           Int              @default(1) // distinct selection-panel members who must have recorded a score sheet (when SCORE_SHEET is required)
+  maxProbationDays    Int? // longest probation an offer may state; null = no limit set
+  appealDays          Int              @default(0) // days after a rejection in which the candidate may ask for a review; 0 = no appeal
   updatedAt           DateTime         @updatedAt
   updatedById         String?
 }
@@ -963,11 +1289,87 @@ model ProfileActivity {
   @@index([workerId, kind])
 }
 
+// Photos of finished work (a built cabinet, a sewn dress, a repaired engine), shown on the worker's profile to employers.
+// Self-reported: nobody checks that the work is theirs. The image is re-encoded on upload, which strips hidden metadata such as GPS.
+// A short multiple-choice test for one skill. `questions` is the whole pool: [{ id, text, options[], answer }]. The server
+// asks a random `questionsAsked` of them and grades; the answers are never sent to a browser.
+model SkillTest {
+  id             String             @id @default(uuid())
+  skillId        String             @unique
+  title          String
+  description    String?
+  passPercent    Int                @default(70)
+  questionsAsked Int                @default(8)
+  isActive       Boolean            @default(true)
+  questions      Json
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  skill          Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  attempts       SkillTestAttempt[]
+}
+
+model SkillTestAttempt {
+  id         String        @id @default(uuid())
+  testId     String
+  workerId   String
+  picked     Json // the ids of the questions asked, in order
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  correct    Int?
+  total      Int?
+  passed     Boolean?
+  test       SkillTest     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  worker     WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, testId, startedAt])
+}
+
+model PortfolioItem {
+  id        String        @id @default(uuid())
+  workerId  String
+  fileId    String        @unique
+  caption   String?
+  skillId   String?
+  createdAt DateTime      @default(now())
+  worker    WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  skill     Skill?        @relation(fields: [skillId], references: [id], onDelete: SetNull)
+
+  @@index([workerId, createdAt])
+}
+
 // ───────────────────────── Subscriptions (plans and limits, managed by administrators) ─────────────────────────
 // No payment processing: an administrator records how the employer paid. null limit = unlimited.
 enum SubscriptionStatus {
   ACTIVE
   CANCELLED
+}
+
+enum PlanRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+// An employer's request to move to another plan. The platform takes no payment: an administrator reads the request,
+// agrees the payment outside the system, then approves (which assigns the plan) or declines it.
+model PlanUpgradeRequest {
+  id             String            @id @default(uuid())
+  organizationId String
+  planId         String
+  requestedById  String
+  note           String? // what the employer wants the administrator to know (for example how they will pay)
+  status         PlanRequestStatus @default(PENDING)
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?
+  createdAt      DateTime          @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([status, createdAt])
 }
 
 model SubscriptionPlan {
@@ -987,7 +1389,8 @@ model SubscriptionPlan {
   createdAt                       DateTime @default(now())
   updatedAt                       DateTime @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions   Subscription[]
+  upgradeRequests PlanUpgradeRequest[]
 }
 
 model Subscription {
@@ -1069,4 +1472,99 @@ model TrainingCourseSkill {
 
   @@id([courseId, skillId])
   @@index([skillId])
+}
+
+// ───────── Service marketplace ─────────
+// Independent workers advertise what they offer, and a customer asks them directly. No vacancy and no employer are needed.
+// Contact is consent-based like the rest of the platform: a customer sends an inquiry, and a chat opens only if the
+// provider accepts. Money is never handled here: the two people agree on payment between themselves.
+
+enum ServiceStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  REMOVED
+}
+
+// Where the service is carried out.
+enum ServiceMode {
+  AT_CUSTOMER // the provider comes to the customer
+  AT_PROVIDER // the customer goes to the provider's shop or workshop
+  REMOTE
+}
+
+enum ServiceInquiryStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model ServiceListing {
+  id              String        @id @default(uuid())
+  workerId        String
+  title           String
+  description     String
+  categoryId      String
+  serviceMode     ServiceMode   @default(AT_CUSTOMER)
+  payBasis        PayBasis? // what priceMin and priceMax count; null = not stated
+  priceMin        Int?
+  priceMax        Int?
+  currency        String        @default("ETB")
+  toolsIncluded   Boolean       @default(false)
+  availability    String? // free text, for example "Mon to Sat, 8:00 to 17:00"
+  locationId      String? // the area served, never an exact address
+  status          ServiceStatus @default(DRAFT)
+  descriptionHash String
+  publishedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  worker    WorkerProfile    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  category  Category         @relation(fields: [categoryId], references: [id])
+  location  Location?        @relation(fields: [locationId], references: [id])
+  skills    ServiceSkill[]
+  inquiries ServiceInquiry[]
+
+  @@index([status, categoryId, locationId])
+  @@index([workerId, status])
+  @@index([descriptionHash])
+}
+
+model ServiceSkill {
+  serviceId String
+  skillId   String
+  service   ServiceListing @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  skill     Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, skillId])
+  @@index([skillId])
+}
+
+model ServiceInquiry {
+  id            String               @id @default(uuid())
+  serviceId     String
+  customerId    String
+  message       String
+  preferredDate DateTime?
+  status        ServiceInquiryStatus @default(SENT)
+  createdAt     DateTime             @default(now())
+  respondedAt   DateTime?
+  service       ServiceListing       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customer      User                 @relation("InquiryCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  conversation  Conversation?
+
+  @@index([serviceId, status])
+  @@index([customerId, createdAt])
+}
+
+// A provider no longer accepts inquiries from one customer.
+model ServiceBlock {
+  providerUserId String
+  customerId     String
+  createdAt      DateTime @default(now())
+  provider       User     @relation("BlockProvider", fields: [providerUserId], references: [id], onDelete: Cascade)
+  customer       User     @relation("BlockCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@id([providerUserId, customerId])
 }

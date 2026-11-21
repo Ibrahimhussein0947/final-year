@@ -120,7 +120,34 @@ export function AdminUsers() {
 
 // ───────── Verification ─────────
 
-const KIND: Record<string, string> = { EMPLOYER: 'Employer verification', QUALIFICATION: 'Qualification', SKILL: 'Skill' };
+const KIND: Record<string, string> = { EMPLOYER: 'Employer verification', QUALIFICATION: 'Qualification', SKILL: 'Skill', IDENTITY: 'Identity' };
+const OUTCOME = { CONSISTENT: ['success', 'Details match'], PARTIAL: ['warning', 'Mostly matches'], MISMATCH: ['danger', "Details don't match"], UNREADABLE: ['neutral', 'Could not be read'] } as const;
+const MARK = { FOUND: '✓', CLOSE: '≈', NOT_FOUND: '✗' } as const;
+
+/** The automatic comparison of an uploaded document with what the person typed. It cannot tell whether the document is genuine. */
+function AutoCheckPanel({ c }: { c: NonNullable<VerificationItem['check']> }) {
+  const [tone, label] = OUTCOME[c.outcome];
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Automatic comparison</span><Badge tone={tone}>{label}</Badge>
+        <span className="text-xs text-muted">{c.ocrConfidence !== null ? `read from a picture, confidence ${c.ocrConfidence}%` : 'read from the PDF text'}</span>
+      </div>
+      <ul className="mt-2 space-y-1">
+        {c.fields.map((f) => (
+          <li key={f.field}><span className={f.status === 'FOUND' ? 'text-success' : f.status === 'CLOSE' ? 'text-warning' : 'text-danger'} aria-label={f.status.toLowerCase().replace('_', ' ')}>{MARK[f.status]}</span> <strong>{f.field}</strong>: {f.expected}{f.note ? <span className="text-muted"> ({f.note})</span> : null}{f.read ? <span className="block pl-4 text-xs text-muted">document says: “{f.read}”</span> : null}</li>
+        ))}
+      </ul>
+      {c.reason && <p className="mt-2 text-muted">{c.reason}</p>}
+      {c.flags.length > 0 && (
+        <ul className="mt-2 space-y-1 border-t border-border pt-2" aria-label="Warning signs">
+          {c.flags.map((fl) => <li key={fl.code} className={fl.level === 'warn' ? 'text-warning' : 'text-muted'}>{fl.level === 'warn' ? '⚠ ' : 'ℹ '}{fl.message}</li>)}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-muted">This only compares words and dates; it cannot tell a genuine certificate from a good forgery. Open the file and look at it, and approve only what you are satisfied with.</p>
+    </div>
+  );
+}
 
 function VerificationRow({ v }: { v: VerificationItem }) {
   const [note, setNote] = useState('');
@@ -136,6 +163,7 @@ function VerificationRow({ v }: { v: VerificationItem }) {
           </div>
           <Badge tone={v.status === 'PENDING' ? 'warning' : v.status === 'APPROVED' ? 'success' : 'danger'}>{v.status.toLowerCase()}</Badge>
         </div>
+        {v.check && <AutoCheckPanel c={v.check} />}
         {v.evidenceUrl && (
           <Button className="mt-3" size="sm" variant="outline" onClick={() => downloadProtected(v.evidenceUrl!, 'evidence').catch(() => setDlError('Could not open the evidence file.'))}>Open evidence</Button>
         )}
@@ -177,12 +205,12 @@ const REASON: Record<string, string> = { SCAM: 'Scam or fraud', FALSE_INFO: 'Fal
 function ReportRow({ r }: { r: ReportItem }) {
   const [note, setNote] = useState('');
   const act = useAdminAction((action: string) => api(`/admin/moderation/reports/${r.id}/resolve`, { method: 'POST', body: { action, note: note.trim() || undefined } }), { invalidate: ['reports', 'stats', 'users'] });
-  const strong = r.targetType === 'JOB' ? ['REMOVE_JOB', 'Remove the job'] : ['SUSPEND_USER', 'Suspend the user'];
+  const strong = r.targetType === 'JOB' ? ['REMOVE_JOB', 'Remove the job'] : r.targetType === 'SERVICE' ? ['REMOVE_SERVICE', 'Remove the listing'] : ['SUSPEND_USER', 'Suspend the user'];
   return (
     <li>
       <Card className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div><p className="font-semibold">{r.targetType === 'JOB' ? 'Job' : 'User'}: {r.target?.label}</p><p className="text-sm text-muted">{REASON[r.reason] ?? r.reason} · reported by {r.reporter} · {when(r.createdAt)}</p></div>
+          <div><p className="font-semibold">{r.targetType === 'JOB' ? 'Job' : r.targetType === 'SERVICE' ? 'Service' : 'User'}: {r.target?.label}</p><p className="text-sm text-muted">{REASON[r.reason] ?? r.reason} · reported by {r.reporter} · {when(r.createdAt)}</p></div>
           {r.openReportsOnTarget > 1 && <Badge tone="warning">{r.openReportsOnTarget} open reports</Badge>}
         </div>
         {r.details && <p className="mt-2 rounded-lg bg-surface-2 p-3 text-sm">“{r.details}”</p>}

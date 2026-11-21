@@ -93,8 +93,11 @@ describe('catalog of employer types', () => {
     expect(by('GOVERNMENT').policyLabel).toBe('Government vacancy');
     expect(by('GOVERNMENT').rules.join(' ')).toMatch(/verified/);
     expect(by('GOVERNMENT').rules.join(' ')).toMatch(/reference number/);
-    expect(by('PRIVATE_COMPANY').rules).toEqual([]);
+    // a private company has no formal procedure, only the probation limit; a household has nothing enforced at all
+    expect(by('PRIVATE_COMPANY').rules).toEqual([expect.stringMatching(/probation period of at most 45 days/)]);
     expect(by('HOUSEHOLD').rules).toEqual([]);
+    expect(by('GOVERNMENT').rules.join(' ')).toMatch(/3 different selection panel members/);
+    expect(by('GOVERNMENT').rules.join(' ')).toMatch(/ask for a review within 7 days/);
   });
 
   it('is public', async () => {

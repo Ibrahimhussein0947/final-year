@@ -1,3 +1,5 @@
+import { syncOrgVerification } from '../documents/orgVerification';
+import { DOC_LABEL } from '../documents/requirements';
 import { describeValue } from '../criteria/validate';
 import type { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -8,6 +10,7 @@ import { disconnectUser } from '../../realtime';
 import { notify } from '../notifications/service';
 import { notifyNewJobMatches } from '../matching/service';
 import { notifySavedSearchMatches } from '../jobs/savedSearches';
+import { scanJobText } from '../jobs/scamCheck';
 import { clearMatchingCaches } from '../matching/weights';
 import { clearSkillIndexCache } from '../analysis/skillIndex';
 
@@ -100,6 +103,9 @@ export async function listVerifications(q: { status?: string; kind?: string }) {
       if (r.targetType === 'EDUCATION') {
         const e = await prisma.education.findUnique({ where: { id: r.targetId }, select: { level: true, field: true, institution: true, year: true } });
         target = e ? [e.level, e.field, e.institution, e.year].filter(Boolean).join(' · ') : '(removed by the worker)';
+      } else if (r.targetType === 'EXPERIENCE') {
+        const x = await prisma.workExperience.findUnique({ where: { id: r.targetId }, select: { title: true, employer: true, startDate: true, endDate: true } });
+        target = x ? `Job: ${[x.title, x.employer].filter(Boolean).join(' at ')}, ${x.startDate.getUTCFullYear()} to ${x.endDate ? x.endDate.getUTCFullYear() : 'now'}` : '(removed by the worker)';
       } else if (r.targetType === 'CERTIFICATION') {
         const c = await prisma.certification.findUnique({ where: { id: r.targetId }, select: { name: true, issuer: true, year: true } });
         target = c ? [c.name, c.issuer, c.year].filter(Boolean).join(' · ') : '(removed by the worker)';
@@ -111,8 +117,23 @@ export async function listVerifications(q: { status?: string; kind?: string }) {
       target = (await prisma.skill.findUnique({ where: { id: r.targetId }, select: { nameEn: true } }))?.nameEn ?? null;
     } else if (r.kind === 'EMPLOYER') {
       target = r.user.employerProfile?.organization.name ?? null;
+    } else if (r.kind === 'IDENTITY') {
+      const i = r.targetId ? await prisma.workerIdentity.findUnique({ where: { workerId: r.targetId } }) : null;
+      const born = i?.dateOfBirth ? i.dateOfBirth.toISOString().slice(0, 10) : '-';
+      target = !i ? null : r.targetType === 'NATIONAL_ID'
+        ? `ID document: ${r.user.fullName}, born ${born}${i.idNumber ? `, ${i.idType ? `${i.idType.replace(/_/g, ' ').toLowerCase()} ` : 'number '}${i.idNumber}` : ''}`
+        : `Birth certificate: ${r.user.fullName}, father ${i.fatherName ?? '-'}${i.grandfatherName ? `, grandfather ${i.grandfatherName}` : ''}, born ${born}`;
     }
+    if (r.kind === 'EMPLOYER' && r.targetType && r.targetId) {
+      const o = await prisma.organization.findUnique({ where: { id: r.targetId }, select: { name: true, type: true, legal: true } });
+      const l = o?.legal;
+      target = o ? `${DOC_LABEL[r.targetType as keyof typeof DOC_LABEL] ?? r.targetType}: ${o.name} (${o.type.replace(/_/g, ' ').toLowerCase()})${l?.tin ? `, TIN ${l.tin}` : ''}${l?.licenseNumber ? `, licence ${l.licenseNumber}` : ''}${l?.licenseExpiresAt ? ` until ${l.licenseExpiresAt.toISOString().slice(0, 10)}` : ''}${l?.registrationNumber ? `, registration ${l.registrationNumber}` : ''}` : null;
+    }
+    // What the system could and could not match in the uploaded document (a hint for the reviewer, never a verdict).
+    const c = r.evidenceFileId ? await prisma.documentCheck.findUnique({ where: { fileId: r.evidenceFileId } }) : null;
+    const stored = c ? (c.fields as unknown as { items: unknown[]; reason: string | null }) : null;
     items.push({
+      check: c && stored ? { docType: c.docType, outcome: c.outcome, reason: stored.reason, fields: stored.items, flags: c.flags, ocrConfidence: c.ocrConfidence, textChars: c.textChars } : null,
       id: r.id, kind: r.kind, status: r.status, createdAt: r.createdAt, reviewedAt: r.reviewedAt, note: r.note,
       requester: { id: r.user.id, name: r.user.fullName, role: r.user.role },
       organization: r.user.employerProfile?.organization ?? null,
@@ -143,7 +164,13 @@ export async function reviewVerification(adminId: string, requestId: string, dec
   if (r.kind === 'EMPLOYER') {
     const orgId = r.user.employerProfile?.organizationId;
     if (!orgId) throw conflict('This employer no longer has an organization');
-    ops.push(prisma.organization.update({ where: { id: orgId }, data: decision === 'APPROVED' ? { verificationStatus: 'VERIFIED', verifiedAt: new Date() } : { verificationStatus: 'REJECTED' } }));
+    // One of several documents: the organization becomes verified when ALL its required documents are approved (see syncOrgVerification).
+    // A request with no document type is the older single-document request and still verifies it directly.
+    if (!r.targetType) ops.push(prisma.organization.update({ where: { id: orgId }, data: decision === 'APPROVED' ? { verificationStatus: 'VERIFIED', verifiedAt: new Date() } : { verificationStatus: 'REJECTED' } }));
+  } else if (decision === 'APPROVED' && r.kind === 'IDENTITY') {
+    const workerId = r.user.workerProfile?.id;
+    if (!workerId) throw conflict('This person no longer has a worker profile');
+    ops.push(prisma.workerIdentity.update({ where: { workerId }, data: { verifiedAt: new Date() } }));
   } else if (decision === 'APPROVED' && (r.kind === 'QUALIFICATION' || r.kind === 'SKILL')) {
     const workerId = r.user.workerProfile?.id;
     if (!workerId || !r.targetId) throw conflict('This request has no valid target');
@@ -153,6 +180,9 @@ export async function reviewVerification(adminId: string, requestId: string, dec
     } else if (r.targetType === 'EDUCATION') {
       const { count } = await prisma.education.updateMany({ where: { id: r.targetId, workerId }, data: { source: 'VERIFIED' } });
       if (!count) throw conflict('The worker removed this education entry');
+    } else if (r.targetType === 'EXPERIENCE') {
+      const { count } = await prisma.workExperience.updateMany({ where: { id: r.targetId, workerId }, data: { source: 'VERIFIED', evidenceFileId: r.evidenceFileId } });
+      if (!count) throw conflict('The worker removed this job entry');
     } else if (r.targetType === 'CERTIFICATION') {
       const { count } = await prisma.certification.updateMany({ where: { id: r.targetId, workerId }, data: { source: 'VERIFIED', evidenceFileId: r.evidenceFileId } });
       if (!count) throw conflict('The worker removed this certificate');
@@ -162,7 +192,8 @@ export async function reviewVerification(adminId: string, requestId: string, dec
     }
   }
   await prisma.$transaction(ops);
-  await notify(r.userId, 'verification.reviewed', { kind: r.kind, decision, note });
+  if (r.kind === 'EMPLOYER' && r.targetType && r.user.employerProfile?.organizationId) await syncOrgVerification(r.user.employerProfile.organizationId);
+  await notify(r.userId, 'verification.reviewed', { kind: r.kind, decision, note, ...(r.targetType ? { documentType: r.targetType } : {}) });
   return { id: requestId, decision };
 }
 
@@ -181,6 +212,9 @@ export async function listReports(status?: string) {
     if (r.targetType === 'JOB') {
       const j = await prisma.job.findUnique({ where: { id: r.targetId }, select: { title: true, status: true, postedById: true, organization: { select: { name: true, verificationStatus: true } } } });
       target = j ? { label: `${j.title} (${j.organization.name}${j.organization.verificationStatus === 'VERIFIED' ? ', verified' : ', unverified'})`, status: j.status, ownerId: j.postedById } : { label: '(job no longer exists)' };
+    } else if (r.targetType === 'SERVICE') {
+      const s = await prisma.serviceListing.findUnique({ where: { id: r.targetId }, select: { title: true, status: true, worker: { select: { userId: true, user: { select: { fullName: true } } } } } });
+      target = s ? { label: `${s.title} (service by ${s.worker.user.fullName})`, status: s.status, ownerId: s.worker.userId } : { label: '(service no longer exists)' };
     } else {
       const u = await prisma.user.findUnique({ where: { id: r.targetId }, select: { fullName: true, role: true, status: true } });
       target = u ? { label: `${u.fullName} (${u.role.toLowerCase()})`, status: u.status } : { label: '(user no longer exists)' };
@@ -194,17 +228,19 @@ export async function listReports(status?: string) {
   return items;
 }
 
-export type ReportAction = 'DISMISS' | 'NO_ACTION' | 'REMOVE_JOB' | 'SUSPEND_USER';
+export type ReportAction = 'DISMISS' | 'NO_ACTION' | 'REMOVE_JOB' | 'REMOVE_SERVICE' | 'SUSPEND_USER';
 
 export async function resolveReport(adminId: string, reportId: string, action: ReportAction, note: string | null) {
   const r = await prisma.report.findUnique({ where: { id: reportId } });
   if (!r) throw notFound('Report not found');
   if (r.status === 'RESOLVED' || r.status === 'DISMISSED') throw conflict('This report was already handled');
   if (action === 'REMOVE_JOB' && r.targetType !== 'JOB') throw badRequest('Only job reports can remove a job');
+  if (action === 'REMOVE_SERVICE' && r.targetType !== 'SERVICE') throw badRequest('Only service reports can remove a service listing');
   if (action === 'SUSPEND_USER' && r.targetType !== 'USER') throw badRequest('Only user reports can suspend a user');
   if (action !== 'DISMISS' && action !== 'NO_ACTION' && !note) throw badRequest('Add a note explaining the action', { note: ['Required'] });
 
   if (action === 'REMOVE_JOB') await removeJob(adminId, r.targetId, note);
+  if (action === 'REMOVE_SERVICE') await removeServiceListing(r.targetId, note);
   if (action === 'SUSPEND_USER') await setUserStatus(adminId, r.targetId, 'SUSPENDED');
 
   const closed = action === 'DISMISS' ? 'DISMISSED' : 'RESOLVED';
@@ -214,6 +250,18 @@ export async function resolveReport(adminId: string, reportId: string, action: R
     data: { status: closed, resolvedById: adminId, resolvedAt: new Date(), resolutionNote: note },
   });
   return { id: reportId, status: closed };
+}
+
+/** An administrator takes a service listing down after a report. The provider is told, and waiting customers are released. */
+async function removeServiceListing(serviceId: string, note: string | null) {
+  const s = await prisma.serviceListing.findUnique({ where: { id: serviceId }, select: { id: true, title: true, status: true, worker: { select: { userId: true } } } });
+  if (!s) throw notFound('Service not found');
+  if (s.status === 'REMOVED') return;
+  await prisma.$transaction([
+    prisma.serviceListing.update({ where: { id: serviceId }, data: { status: 'REMOVED' } }),
+    prisma.serviceInquiry.updateMany({ where: { serviceId, status: 'SENT' }, data: { status: 'CANCELLED', respondedAt: new Date() } }),
+  ]);
+  await notify(s.worker.userId, 'service.removed', { serviceId, serviceTitle: s.title, note });
 }
 
 export async function removeJob(adminId: string, jobId: string, note: string | null) {
@@ -231,7 +279,7 @@ export async function listPendingJobs() {
     orderBy: { updatedAt: 'asc' },
     take: 100,
     select: {
-      id: true, title: true, description: true, createdAt: true, descriptionHash: true,
+      id: true, title: true, description: true, benefits: true, schedule: true, createdAt: true, descriptionHash: true,
       organization: { select: { name: true, verificationStatus: true } },
       category: { select: { nameEn: true } },
     },
@@ -239,10 +287,15 @@ export async function listPendingJobs() {
   const out = [];
   for (const j of rows) {
     const copies = await prisma.job.count({ where: { descriptionHash: j.descriptionHash, id: { not: j.id }, status: { in: ['ACTIVE', 'PENDING_REVIEW'] } } });
+    const scam = scanJobText(j);
     out.push({
       id: j.id, title: j.title, snippet: j.description.slice(0, 300), category: j.category.nameEn, organization: j.organization.name,
       organizationVerified: j.organization.verificationStatus === 'VERIFIED',
-      reason: copies > 0 ? 'Same text as another live job' : j.organization.verificationStatus !== 'VERIFIED' ? 'Unverified organization' : 'Edited after approval',
+      reason: scam.flagged
+        ? 'Possible scam wording'
+        : copies > 0 ? 'Same text as another live job' : j.organization.verificationStatus !== 'VERIFIED' ? 'Unverified organization' : 'Edited after approval',
+      scamScore: scam.score,
+      scamSignals: scam.signals.map((s) => ({ code: s.code, label: s.label, evidence: s.evidence })),
       createdAt: j.createdAt,
     });
   }

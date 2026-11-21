@@ -6,6 +6,7 @@ import type { FileKind } from '@prisma/client';
 import { env } from '../../config/env';
 import { prisma } from '../../lib/prisma';
 import { AppError, badRequest } from '../../lib/errors';
+import { assertClean } from './antivirus';
 
 const apiRoot = path.resolve(__dirname, '../../..');
 export const uploadRoot = path.resolve(apiRoot, env.UPLOAD_DIR);
@@ -25,7 +26,7 @@ const RULES: Record<FileKind, { types: Detected['ext'][]; maxBytes: number }> = 
   CV: { types: ['pdf', 'jpg', 'png'], maxBytes: 5 * 1024 * 1024 },
   VERIFICATION_EVIDENCE: { types: ['pdf', 'jpg', 'png'], maxBytes: 5 * 1024 * 1024 },
   CERTIFICATE: { types: ['pdf', 'jpg', 'png'], maxBytes: 5 * 1024 * 1024 },
-  PORTFOLIO: { types: ['pdf', 'jpg', 'png'], maxBytes: 5 * 1024 * 1024 },
+  PORTFOLIO: { types: ['jpg', 'png'], maxBytes: 5 * 1024 * 1024 },
 };
 
 /** Multer parses into memory (hard 5 MB cap); we validate before anything touches the disk. */
@@ -42,6 +43,7 @@ export async function saveUpload(ownerId: string, kind: FileKind, file: Express.
   if (!detected || !rule.types.includes(detected.ext)) {
     throw new AppError(415, 'UNSUPPORTED_FILE', `Unsupported file type. Allowed: ${rule.types.join(', ').toUpperCase()}`);
   }
+  await assertClean(file.buffer, ownerId, kind); // nothing infected reaches the disk
   await fs.mkdir(uploadRoot, { recursive: true });
   const storageName = `${randomUUID()}.${detected.ext}`; // random name: user input never reaches the path
   await fs.writeFile(path.join(uploadRoot, storageName), file.buffer, { flag: 'wx' });

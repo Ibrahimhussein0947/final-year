@@ -2,8 +2,8 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 import { aiClient } from '../../integrations/aiClient';
 
-export { isMostlyEthiopic, jobText, skillText, workerText } from './embeddingText';
-import { isMostlyEthiopic, jobText, workerText } from './embeddingText';
+export { isLikelyAfaanOromoo, isMostlyEthiopic, isUnsupportedForEmbedding, jobText, skillText, workerText } from './embeddingText';
+import { isUnsupportedForEmbedding, jobText, workerText } from './embeddingText';
 
 export async function refreshWorkerEmbedding(workerId: string): Promise<boolean> {
   const w = await prisma.workerProfile.findUnique({
@@ -12,7 +12,7 @@ export async function refreshWorkerEmbedding(workerId: string): Promise<boolean>
   });
   if (!w) return false;
   const text = workerText({ ...w, skills: w.skills.map((s) => s.skill.nameEn) });
-  if (!text || isMostlyEthiopic(w.headline, w.occupation, w.bio)) {
+  if (!text || isUnsupportedForEmbedding(w.headline, w.occupation, w.bio)) {
     await prisma.workerProfile.update({ where: { id: workerId }, data: { embedding: [], embeddingModel: null } });
     return false;
   }
@@ -28,7 +28,7 @@ export async function refreshJobEmbedding(jobId: string): Promise<boolean> {
     select: { title: true, description: true, skills: { select: { importance: true, skill: { select: { nameEn: true } } } } },
   });
   if (!j) return false;
-  if (isMostlyEthiopic(j.title, j.description)) {
+  if (isUnsupportedForEmbedding(j.title, j.description)) {
     await prisma.job.update({ where: { id: jobId }, data: { embedding: [], embeddingModel: null } });
     return false;
   }

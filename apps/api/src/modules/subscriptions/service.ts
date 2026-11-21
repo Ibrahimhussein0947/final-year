@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
+import { notify } from '../notifications/service';
 
 /**
  * Subscriptions are plans with limits, assigned and changed by administrators. The system does not take payments:
@@ -216,4 +217,75 @@ export async function adminSubscriptions(q: { q?: string; page: number; pageSize
     return { id: o.id, name: o.name, type: o.type, plan: { id: cur.plan.id, name: cur.plan.name }, isDefault: cur.isDefault, endsAt: cur.subscription?.endsAt ?? null, paymentNote: cur.subscription?.paymentNote ?? null, usage, maxActiveJobs: cur.plan.maxActiveJobs, maxInvitationsPerMonth: cur.plan.maxInvitationsPerMonth };
   }));
   return { total, page: q.page, pageSize: q.pageSize, items };
+}
+
+// ───────── Upgrade requests (the employer asks, an administrator decides; no payment is taken here) ─────────
+
+export const planRequestSchema = z.object({ planId: z.string().uuid(), note: z.string().trim().max(300).transform((v) => v || null).nullable().optional() }).strict();
+export const planDecisionSchema = z.object({
+  endsAt: z.coerce.date().nullable().optional(),
+  paymentNote: z.string().trim().max(300).transform((v) => v || null).nullable().optional(),
+  decisionNote: z.string().trim().max(300).transform((v) => v || null).nullable().optional(),
+}).strict();
+
+const requestView = {
+  id: true, status: true, note: true, createdAt: true, decidedAt: true, decisionNote: true,
+  plan: { select: { id: true, name: true } },
+} as const;
+
+/** The plans an employer can ask for, the one they are on, and their open request (if any) and most recent decision. */
+export async function plansForEmployer(orgId: string) {
+  const [plans, cur, pending, lastDecided] = await Promise.all([
+    prisma.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { priceEtbMonthly: 'asc' }], select: planSelect }),
+    currentPlan(orgId),
+    prisma.planUpgradeRequest.findFirst({ where: { organizationId: orgId, status: 'PENDING' }, select: requestView }),
+    prisma.planUpgradeRequest.findFirst({ where: { organizationId: orgId, status: { in: ['APPROVED', 'DECLINED'] } }, orderBy: { decidedAt: 'desc' }, select: requestView }),
+  ]);
+  return { plans, currentPlanId: cur.plan.id, pending, lastDecided };
+}
+
+export async function requestPlan(userId: string, orgId: string, input: z.infer<typeof planRequestSchema>) {
+  const [plan, cur, open] = await Promise.all([
+    prisma.subscriptionPlan.findUnique({ where: { id: input.planId }, select: { id: true, isActive: true, name: true } }),
+    currentPlan(orgId),
+    prisma.planUpgradeRequest.findFirst({ where: { organizationId: orgId, status: 'PENDING' }, select: { id: true } }),
+  ]);
+  if (!plan || !plan.isActive) throw notFound('Plan not found');
+  if (cur.plan.id === plan.id) throw conflict('You are already on that plan');
+  if (open) throw conflict('You already have a request waiting for the administrator. Cancel it first to ask for a different plan.');
+  return prisma.planUpgradeRequest.create({ data: { organizationId: orgId, planId: plan.id, requestedById: userId, note: input.note ?? null }, select: requestView });
+}
+
+export async function cancelPlanRequest(orgId: string, id: string) {
+  const { count } = await prisma.planUpgradeRequest.updateMany({ where: { id, organizationId: orgId, status: 'PENDING' }, data: { status: 'CANCELLED', decidedAt: new Date() } });
+  if (!count) throw notFound('No waiting request found');
+}
+
+export async function adminPlanRequests(status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'CANCELLED') {
+  const rows = await prisma.planUpgradeRequest.findMany({
+    where: { status }, orderBy: { createdAt: status === 'PENDING' ? 'asc' : 'desc' }, take: 100,
+    select: { ...requestView, organization: { select: { id: true, name: true, type: true } } },
+  });
+  const items = await Promise.all(rows.map(async (r) => ({ ...r, currentPlan: (await currentPlan(r.organization.id)).plan.name })));
+  return { items };
+}
+
+/** Approve: put the organization on the requested plan (the administrator has agreed the payment outside the system), then tell the employer. */
+export async function approvePlanRequest(adminId: string, id: string, input: z.infer<typeof planDecisionSchema>) {
+  const req = await prisma.planUpgradeRequest.findUnique({ where: { id }, select: { id: true, status: true, organizationId: true, planId: true, requestedById: true, plan: { select: { name: true } } } });
+  if (!req) throw notFound('Request not found');
+  if (req.status !== 'PENDING') throw conflict('This request has already been decided');
+  await assignPlan(adminId, req.organizationId, { planId: req.planId, endsAt: input.endsAt ?? null, paymentNote: input.paymentNote ?? null });
+  await prisma.planUpgradeRequest.update({ where: { id }, data: { status: 'APPROVED', decidedById: adminId, decidedAt: new Date(), decisionNote: input.decisionNote ?? null } });
+  await notify(req.requestedById, 'plan.request_decided', { planName: req.plan.name, approved: true, note: input.decisionNote ?? null });
+  return { planName: req.plan.name, organizationId: req.organizationId };
+}
+
+export async function declinePlanRequest(adminId: string, id: string, input: z.infer<typeof planDecisionSchema>) {
+  const req = await prisma.planUpgradeRequest.findUnique({ where: { id }, select: { id: true, status: true, organizationId: true, requestedById: true, plan: { select: { name: true } } } });
+  if (!req) throw notFound('Request not found');
+  if (req.status !== 'PENDING') throw conflict('This request has already been decided');
+  await prisma.planUpgradeRequest.update({ where: { id }, data: { status: 'DECLINED', decidedById: adminId, decidedAt: new Date(), decisionNote: input.decisionNote ?? null } });
+  await notify(req.requestedById, 'plan.request_decided', { planName: req.plan.name, approved: false, note: input.decisionNote ?? null });
+  return { planName: req.plan.name, organizationId: req.organizationId };
 }

@@ -163,6 +163,8 @@ export async function listMyInterviews(userId: string, role: 'WORKER' | 'EMPLOYE
     mode: r.mode,
     locationOrLink: r.locationOrLink,
     status: r.status,
+    response: r.workerResponse,
+    declineNote: role === 'EMPLOYER' ? r.declineNote : null,
     job: { id: r.application.job.id, title: r.application.job.title },
     with: role === 'WORKER' ? r.application.job.organization.name : r.application.worker.user.fullName,
   }));
@@ -199,6 +201,8 @@ export function buildIcs(items: CalItem[], role: 'WORKER' | 'EMPLOYER', now = ne
   return `${lines.join('\r\n')}\r\n`;
 }
 
+const respondSchema = z.object({ response: z.enum(['CONFIRMED', 'DECLINED']), note: z.string().max(300).optional() });
+
 export function interviewsRouter() {
   const router = Router();
   router.use(requireAuth, requireRole('WORKER', 'EMPLOYER'));
@@ -226,6 +230,28 @@ export function interviewsRouter() {
       throw conflict(w.opensAt > new Date() ? `The call can be joined from ${w.opensAt.toISOString()} (15 minutes before it starts).` : 'This call has ended.');
     }
     res.json({ url: iv.locationOrLink, opensAt: w.opensAt, closesAt: w.closesAt });
+  });
+
+  // The candidate answers a proposed time: confirm it, or say they cannot come (the employer is told and can move it).
+  router.post('/:id/respond', requireRole('WORKER'), async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success) throw notFound('Interview not found');
+    const body = respondSchema.safeParse(req.body);
+    if (!body.success) throw badRequest('Choose confirm or decline', body.error.flatten().fieldErrors);
+    const iv = await prisma.interview.findFirst({
+      where: { id: id.data, status: 'SCHEDULED', application: { worker: { userId: req.user!.id } } },
+      include: { application: { select: { id: true, status: true, worker: { select: { user: { select: { fullName: true } } } }, job: { select: { id: true, title: true, postedById: true } } } } },
+    });
+    if (!iv) throw notFound('Interview not found');
+    if (['REJECTED', 'WITHDRAWN'].includes(iv.application.status)) throw conflict('This application is closed');
+    if (iv.scheduledAt <= new Date()) throw conflict('This interview time has already passed');
+    const note = body.data.response === 'DECLINED' ? body.data.note?.trim() || null : null;
+    await prisma.interview.update({ where: { id: iv.id }, data: { workerResponse: body.data.response, respondedAt: new Date(), declineNote: note } });
+    await notify(iv.application.job.postedById, 'interview.responded', {
+      applicationId: iv.application.id, jobId: iv.application.job.id, jobTitle: iv.application.job.title,
+      scheduledAt: iv.scheduledAt.toISOString(), response: body.data.response, candidateName: iv.application.worker.user.fullName, note,
+    });
+    res.json({ response: body.data.response });
   });
 
   router.get('/mine', async (req, res) => {

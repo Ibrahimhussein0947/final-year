@@ -8,6 +8,7 @@ export interface TalentItem {
   workerId: string; name: string; headline: string | null; occupation: string | null; yearsExperience: number;
   photoUrl: string | null; location: string | null; availability: string; completionPct: number; skills: string[];
   verified: { skills: number; qualifications: number; answers: number };
+  trust?: import('@/lib/trust').Trust | null;
   /** Present only when the search is ranked by one of the employer's jobs. */
   match?: Match | null; invitation?: InvitationState | null; applied?: boolean;
 }

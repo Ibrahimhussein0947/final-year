@@ -117,14 +117,20 @@ function education(text: string): { s: Suggestion<string | null> | null; note?: 
 // ── Employment type and work mode ──
 
 const TYPES: { value: string; re: RegExp }[] = [
-  { value: 'INTERNSHIP', re: /\b(internship|intern|trainee|apprentice(?:ship)?)\b/i },
+  { value: 'VOLUNTEER', re: /\b(volunteer(?:s|ing)?|unpaid (?:role|position|work)|voluntary (?:service|work|position))\b/i },
+  { value: 'APPRENTICESHIP', re: /\b(apprentice(?:ship)?s?|learn(?:ing)? (?:a|the) trade)\b/i },
+  { value: 'INTERNSHIP', re: /\b(internship|intern|trainee)\b/i },
   { value: 'SEASONAL', re: /\b(seasonal|harvest season|during the season)\b/i },
+  { value: 'GIG', re: /\b(gig work|gig|one[- ]off (?:task|job))\b/i },
+  { value: 'ON_CALL', re: /\bon[- ]call (?:basis|work|position|staff|role)\b/i },
   { value: 'DAILY', re: /\b(daily (?:work|wages?|labou?rers?|paid|jobs?)|day labou?rers?|per day|paid daily|casual labou?rers?)\b/i },
+  { value: 'CASUAL', re: /\b(casual (?:work|job|staff|position|basis)|irregular work)\b/i },
   { value: 'TEMPORARY', re: /\b(temporary|temp(?:orary)? position|short[- ]term)\b/i },
   { value: 'CONTRACT', re: /\b(contract(?: position| basis| role)?|fixed[- ]term|\d+[- ]month contract)\b/i },
   { value: 'FREELANCE', re: /\b(freelance|freelancer|self[- ]employed|per project|project basis)\b/i },
   { value: 'PART_TIME', re: /\b(part[- ]time|half[- ]day|few hours|weekends only)\b/i },
-  { value: 'FULL_TIME', re: /\b(full[- ]time|permanent position|permanent role|permanent)\b/i },
+  { value: 'FULL_TIME', re: /\bfull[- ]time\b/i },
+  { value: 'PERMANENT', re: /\b(permanent(?: position| role| job| employment)?|long[- ]term employment)\b/i },
 ];
 const MODES: { value: string; re: RegExp }[] = [
   { value: 'HYBRID', re: /\bhybrid\b/i },

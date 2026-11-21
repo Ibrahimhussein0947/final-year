@@ -11,6 +11,7 @@ import { MessagesPage } from '@/pages/Messages';
 import AnalyticsPage from '@/pages/Analytics';
 import { AdminLayout } from '@/pages/admin/AdminLayout';
 import { AdminModeration, AdminOverview, AdminUsers, AdminVerification } from '@/pages/admin/pagesTrust';
+import { AdminPerformance } from '@/pages/admin/pagesPerformance';
 import { AdminAnalytics, AdminAudit, AdminMatching, AdminTaxonomy, AdminTranslations } from '@/pages/admin/pagesSystem';
 import { AdminCriteria } from '@/pages/admin/pagesCriteria';
 import { AdminOrganizations } from '@/pages/admin/pagesOrganizations';
@@ -18,10 +19,12 @@ import { AdminHiringRules } from '@/pages/admin/pagesHiring';
 import { AdminTeam } from '@/pages/admin/pagesTeam';
 import { AdminPlans } from '@/pages/admin/pagesPlans';
 import { AdminTraining } from '@/pages/admin/pagesTraining';
+import { AdminPlaces } from '@/pages/admin/pagesPlaces';
 import Dashboard from '@/pages/Dashboard';
 import WorkerProfilePage from '@/pages/worker/WorkerProfilePage';
 import CvBuilderPage from '@/pages/worker/CvBuilder';
 import InterviewsPage from '@/pages/Interviews';
+import DocumentsPage from '@/pages/Documents';
 import HiringBoardPage from '@/pages/employer/HiringBoard';
 import ProfileViewsPage from '@/pages/worker/ProfileViews';
 import OrganizationPage from '@/pages/employer/OrganizationPage';
@@ -33,11 +36,15 @@ import CandidatePage from '@/pages/employer/Candidate';
 import ComparePage from '@/pages/employer/Compare';
 import { MyApplicationsPage, SavedJobsPage } from '@/pages/worker/Applications';
 import RecommendedJobsPage from '@/pages/worker/Recommended';
+import SkillTestsPage from '@/pages/worker/SkillTests';
 import RecommendedWorkersPage, { WorkerProfileForEmployer } from '@/pages/employer/RecommendedWorkers';
 import FindWorkersPage from '@/pages/employer/FindWorkers';
 import Landing from '@/pages/Landing';
 import Categories from '@/pages/Categories';
 import { JobsPage, WorkersPage } from '@/pages/Browse';
+import { ServiceDetailPage, ServicesPage } from '@/pages/Services';
+import MyServicesPage from '@/pages/worker/MyServices';
+import ServiceRequestsPage from '@/pages/ServiceRequests';
 import { LoginPage, RegisterPage } from '@/pages/Auth';
 import { ForgotPasswordPage } from '@/pages/PasswordReset';
 import { SecurityPage } from '@/pages/Security';
@@ -64,6 +71,10 @@ export default function App() {
                 <Route index element={<Landing />} />
                 <Route path="jobs" element={<JobsPage />} />
                 <Route path="workers" element={<WorkersPage />} />
+                <Route path="services" element={<ServicesPage />} />
+                <Route path="services/:id" element={<ServiceDetailPage />} />
+                <Route path="my-services" element={<RequireAuth roles={['WORKER']}><MyServicesPage /></RequireAuth>} />
+                <Route path="service-requests" element={<RequireAuth roles={['WORKER', 'EMPLOYER']}><ServiceRequestsPage /></RequireAuth>} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="how-it-works" element={<HowItWorksPage />} />
                 <Route path="install" element={<InstallPage />} />
@@ -75,6 +86,7 @@ export default function App() {
                 <Route path="login" element={<LoginPage />} />
                 <Route path="register" element={<RegisterPage />} />
                 <Route path="forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="documents" element={<RequireAuth roles={['WORKER', 'EMPLOYER']}><DocumentsPage /></RequireAuth>} />
                 <Route path="interviews" element={<RequireAuth roles={['WORKER', 'EMPLOYER']}><InterviewsPage /></RequireAuth>} />
                 <Route path="account/security" element={<RequireAuth><SecurityPage /></RequireAuth>} />
                 <Route path="dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
@@ -105,15 +117,18 @@ export default function App() {
                   <Route path="team" element={<AdminTeam />} />
                   <Route path="plans" element={<AdminPlans />} />
                   <Route path="training" element={<AdminTraining />} />
+                  <Route path="places" element={<AdminPlaces />} />
                   <Route path="organizations" element={<AdminOrganizations />} />
                   <Route path="translations" element={<AdminTranslations />} />
                   <Route path="matching" element={<AdminMatching />} />
+                  <Route path="performance" element={<AdminPerformance />} />
                   <Route path="analytics" element={<AdminAnalytics />} />
                   <Route path="audit" element={<AdminAudit />} />
                 </Route>
                 <Route path="messages" element={<RequireAuth roles={['WORKER', 'EMPLOYER']}><MessagesPage /></RequireAuth>} />
                 <Route path="messages/:id" element={<RequireAuth roles={['WORKER', 'EMPLOYER']}><MessagesPage /></RequireAuth>} />
                 <Route path="recommended" element={<RequireAuth roles={['WORKER']}><RecommendedJobsPage /></RequireAuth>} />
+                <Route path="skill-tests" element={<RequireAuth roles={['WORKER']}><SkillTestsPage /></RequireAuth>} />
                 <Route path="applications" element={<RequireAuth roles={['WORKER']}><MyApplicationsPage /></RequireAuth>} />
                 <Route path="saved" element={<RequireAuth roles={['WORKER']}><SavedJobsPage /></RequireAuth>} />
                 <Route path="*" element={<NotFoundPage />} />

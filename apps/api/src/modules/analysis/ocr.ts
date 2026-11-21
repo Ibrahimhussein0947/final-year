@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { assertDecodable } from '../files/safeImage';
 import path from 'node:path';
 import { AppError } from '../../lib/errors';
 import { logger } from '../../lib/logger';
@@ -26,6 +27,9 @@ export interface OcrResult {
   confidence: number | null; // average word confidence 0..100, as reported by Tesseract
 }
 
+/** Languages Tesseract reads, joined with +. Default English. For Amharic documents install `amh.traineddata` next to `eng.traineddata` and set OCR_LANGS=eng+amh. */
+export const ocrLanguages = () => process.env.OCR_LANGS?.trim() || 'eng';
+
 const cachePath = process.env.OCR_LANG_PATH ?? path.resolve(__dirname, '../../../ocr-data');
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -44,7 +48,7 @@ type CanvasLib = { createCanvas: (w: number, h: number) => Canvas; loadImage: (b
 async function readImages(images: Buffer[]): Promise<OcrResult> {
   fs.mkdirSync(cachePath, { recursive: true });
   const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('eng', 1, { cachePath, logger: () => undefined });
+  const worker = await createWorker(ocrLanguages(), 1, { cachePath, logger: () => undefined });
   try {
     const parts: string[] = [];
     const confs: number[] = [];
@@ -81,6 +85,7 @@ function failure(err: unknown): never {
 export function ocrImage(data: Buffer): Promise<OcrResult> {
   return oneAtATime(async () => {
     try {
+      await assertDecodable(data); // a corrupt picture can crash the native decoder and the whole server, so test it in a child process first
       const { loadImage } = (await import('@napi-rs/canvas')) as unknown as CanvasLib;
       const img = await loadImage(data);
       if (img.width * img.height > MAX_IMAGE_PIXELS) throw new AppError(422, 'IMAGE_TOO_LARGE', 'This picture is too large to read. Use a smaller photo (under about 25 megapixels).');

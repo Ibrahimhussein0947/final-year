@@ -32,6 +32,27 @@ export const skillText = (s: { nameEn: string; aliases: string[] }) => [s.nameEn
  */
 const ETHIOPIC = /[ሀ-᎟ⶀ-⷟꬀-꬯]/g;
 const LETTER = /\p{L}/gu;
+/**
+ * Afaan Oromoo is written in Latin letters, so the script check above cannot see it. The probe measured the embedding
+ * models as unreliable for it (docs/02), so text that is clearly Afaan Oromoo is treated like Amharic: not embedded,
+ * matched by the rules alone. This is a word-list check on very common function words, not a language model: it needs
+ * several of them (a short title alone is not flagged), and it can miss Afaan Oromoo that is mostly English skill names.
+ */
+const OROMO_WORDS = new Set([
+  'fi', 'kan', 'keessa', 'irratti', 'kana', 'akka', 'ykn', 'waan', 'dha', 'hin', "ta'e", 'yoo', 'garuu', 'immoo', 'nama', 'hojii',
+  'waggaa', 'barnoota', "baay'ee", 'isaan', 'koo', 'kee', 'isaa', 'ishee', 'booda', 'gara', 'bira', 'irraa', 'qaba', 'qabu', 'jira',
+  'jiru', 'dandeessa', 'hojjedha', 'hojjechaa', 'barbaada', 'bara',
+]);
+export function isLikelyAfaanOromoo(...parts: (string | null | undefined)[]): boolean {
+  const tokens = parts.filter(Boolean).join(' ').toLowerCase().replace(/[‘’`]/g, "'").match(/[a-z']+/g) ?? [];
+  if (tokens.length < 6) return false;
+  const hits = tokens.filter((t) => OROMO_WORDS.has(t)).length;
+  return hits >= 3 && hits / tokens.length >= 0.12;
+}
+
+/** Text the meaning-based matching is not reliable for (Amharic script, or recognisable Afaan Oromoo): rules only. */
+export const isUnsupportedForEmbedding = (...parts: (string | null | undefined)[]) => isMostlyEthiopic(...parts) || isLikelyAfaanOromoo(...parts);
+
 export function isMostlyEthiopic(...parts: (string | null | undefined)[]): boolean {
   const text = parts.filter(Boolean).join(' ');
   const letters = text.match(LETTER)?.length ?? 0;

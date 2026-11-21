@@ -15,7 +15,7 @@ import type { JobRequirement } from '@/lib/criteria';
 import { SectorRequirements } from '@/pages/employer/SectorRequirements';
 import { useCategories, useSkillSearch } from '@/lib/profile';
 import { useJob, type JobDetail } from '@/lib/jobs';
-import { EDU_LABEL, MODE_LABEL, TYPE_LABEL } from '@/lib/format';
+import { BENEFIT_LABEL, EDU_LABEL, MODE_LABEL, OPEN_TO_LABEL, PAY_BASIS_LABEL, RECRUITMENT_LABEL, SENIORITY_LABEL, TYPE_LABEL, WORKPLACE_LABEL } from '@/lib/format';
 import { HiringRulesNotice } from '@/components/HiringRulesNotice';
 
 const int = (max: number) => z.string().trim().refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) <= max), 'Enter a whole number');
@@ -27,6 +27,10 @@ const schema = z
     categoryId: z.string().min(1, 'Choose a category'),
     employmentType: z.string().min(1),
     workMode: z.string().min(1),
+    seniority: z.string(),
+    workplace: z.string(),
+    recruitmentMethod: z.string(),
+    payBasis: z.string(),
     vacancies: z.string().trim().regex(/^[1-9]\d{0,2}$/, 'Enter 1 or more'),
     salaryMin: int(10_000_000),
     salaryMax: int(10_000_000),
@@ -95,6 +99,8 @@ function Form({ job }: { job?: JobDetail }) {
   const [chain, setChain] = useState<string[]>(job?.locationPath.map((l) => l.id) ?? []);
   const [skills, setSkills] = useState<PickedSkill[]>(job?.allSkills.map((s) => ({ skillId: s.skillId, name: s.name, importance: s.importance })) ?? []);
   const [criteria, setCriteria] = useState<JobRequirement[]>(job?.criteria?.map((c) => ({ criterionId: c.criterionId, importance: c.importance, value: c.value })) ?? []);
+  const [openTo, setOpenTo] = useState<string[]>(job?.openTo ?? []);
+  const [benefitTags, setBenefitTags] = useState<string[]>(job?.benefitTags ?? []);
   const [busy, setBusy] = useState<'save' | 'publish' | null>(null);
   const [error, setError] = useState<{ message: string; details?: string[]; duplicate?: boolean } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -105,7 +111,7 @@ function Form({ job }: { job?: JobDetail }) {
     resolver: zodResolver(schema),
     defaultValues: {
       title: job?.title ?? '', description: job?.description ?? '', categoryId: job?.categoryId ?? '',
-      employmentType: job?.employmentType ?? 'FULL_TIME', workMode: job?.workMode ?? 'ON_SITE', vacancies: String(job?.vacancies ?? 1),
+      employmentType: job?.employmentType ?? 'FULL_TIME', workMode: job?.workMode ?? 'ON_SITE', seniority: job?.seniority ?? '', workplace: job?.workplace ?? '', recruitmentMethod: job?.recruitmentMethod ?? '', payBasis: job?.payBasis ?? '', vacancies: String(job?.vacancies ?? 1),
       salaryMin: job?.salaryMin?.toString() ?? '', salaryMax: job?.salaryMax?.toString() ?? '',
       schedule: job?.schedule ?? '', benefits: job?.benefits ?? '',
       startDate: job?.startDate?.slice(0, 10) ?? '',
@@ -144,7 +150,7 @@ function Form({ job }: { job?: JobDetail }) {
   const payload = (v: Values) => ({
     ...(reviewed ? { extractionReviewed: true } : {}),
     title: v.title, description: v.description, categoryId: v.categoryId,
-    employmentType: v.employmentType, workMode: v.workMode, vacancies: Number(v.vacancies),
+    employmentType: v.employmentType, workMode: v.workMode, seniority: v.seniority || null, openTo, workplace: v.workplace || null, recruitmentMethod: v.recruitmentMethod || null, payBasis: v.payBasis || null, benefitTags, vacancies: Number(v.vacancies),
     salaryMin: num(v.salaryMin), salaryMax: num(v.salaryMax), schedule: v.schedule, benefits: v.benefits,
     startDate: v.startDate || null, deadline: v.deadline || null, referenceNumber: v.referenceNumber || null,
     minExperienceYears: num(v.minExperienceYears), requiredEducationLevel: v.requiredEducationLevel || null,
@@ -212,6 +218,29 @@ function Form({ job }: { job?: JobDetail }) {
               {Object.entries(MODE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </SelectField>
             <TextField label="Number of vacancies" inputMode="numeric" error={errors.vacancies?.message} {...register('vacancies')} />
+            <SelectField label="Level of the position" {...register('seniority')}>
+              <option value="">Not stated</option>
+              {Object.entries(SENIORITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </SelectField>
+            <SelectField label="Where the work is done" {...register('workplace')}>
+              <option value="">Not stated</option>
+              {Object.entries(WORKPLACE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </SelectField>
+            <SelectField label="How you will select people" hint="Describes your process to applicants" {...register('recruitmentMethod')}>
+              <option value="">Not stated</option>
+              {Object.entries(RECRUITMENT_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </SelectField>
+            <fieldset className="sm:col-span-2">
+              <legend className="mb-1 text-sm font-medium">Who is welcome to apply <span className="font-normal text-muted">(optional)</span></legend>
+              <p className="mb-2 text-xs text-muted">Tick the groups you actively welcome. It helps them find your job. It never stops anyone else from applying.</p>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {Object.entries(OPEN_TO_LABEL).map(([v, l]) => (
+                  <label key={v} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={openTo.includes(v)} onChange={(e) => setOpenTo((cur) => (e.target.checked ? [...cur, v] : cur.filter((x) => x !== v)))} />{l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="sm:col-span-2"><TextAreaField voice label="Description" className="min-h-40" hint="Duties, working conditions, and anything a candidate should know." error={errors.description?.message} {...register('description')} /></div>
           </div>
           <JobAnalysisPanel title={watch('title')} description={watch('description')} onApply={applyAnalysis} />
@@ -242,10 +271,26 @@ function Form({ job }: { job?: JobDetail }) {
           <SectorRequirements categoryId={watch('categoryId')} value={criteria} onChange={setCriteria} />
         </SectionCard>
 
-        <SectionCard title="Pay, schedule and deadline" description="Salary is per month in Ethiopian birr (ETB).">
+        <SectionCard title="Pay, schedule and deadline" description="Amounts are in Ethiopian birr (ETB). Choose how the pay is counted, so a daily wage is never read as a monthly salary.">
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField label="Salary from" inputMode="numeric" error={errors.salaryMin?.message} {...register('salaryMin')} />
-            <TextField label="Salary to" inputMode="numeric" error={errors.salaryMax?.message} {...register('salaryMax')} />
+            <div className="sm:col-span-2">
+              <SelectField label="How the pay is counted" {...register('payBasis')}>
+                <option value="">Per month (default)</option>
+                {Object.entries(PAY_BASIS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </SelectField>
+            </div>
+            <TextField label="Pay from" inputMode="numeric" error={errors.salaryMin?.message} {...register('salaryMin')} />
+            <TextField label="Pay to" inputMode="numeric" error={errors.salaryMax?.message} {...register('salaryMax')} />
+            <fieldset className="sm:col-span-2">
+              <legend className="mb-1 text-sm font-medium">What comes with the job <span className="font-normal text-muted">(optional)</span></legend>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {Object.entries(BENEFIT_LABEL).map(([v, l]) => (
+                  <label key={v} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={benefitTags.includes(v)} onChange={(e) => setBenefitTags((cur) => (e.target.checked ? [...cur, v] : cur.filter((x) => x !== v)))} />{l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <TextField label="Working schedule" placeholder="e.g. Mon-Sat, 8:00-17:00" {...register('schedule')} />
             <TextField label="Start date" type="date" {...register('startDate')} />
             <TextField label="Application deadline" type="date" hint="Leave empty to stay open until filled, unless your organization type needs a closing date" {...register('deadline')} />

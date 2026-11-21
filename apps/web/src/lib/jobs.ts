@@ -10,6 +10,14 @@ export interface JobListItem {
   category: { id: string; slug: string; name: string };
   employmentType: string;
   workMode: string;
+  seniority?: string | null;
+  /** Groups the employer welcomes (see OPEN_TO_LABEL). */
+  openTo?: string[];
+  workplace?: string | null;
+  recruitmentMethod?: string | null;
+  /** What salaryMin and salaryMax count: per month, day, hour ... (null on older jobs: monthly). */
+  payBasis?: string | null;
+  benefitTags?: string[];
   salaryMin: number | null;
   salaryMax: number | null;
   currency: string;

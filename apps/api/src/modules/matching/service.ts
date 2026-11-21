@@ -7,6 +7,7 @@ import { notify } from '../notifications/service';
 import { logger } from '../../lib/logger';
 import { getRelations, getWeights } from './weights';
 import { type JobFeatures, type MatchResult, type WorkerFeatures } from './types';
+import { monthlyEquivalent } from '../jobs/classification';
 
 /** Recommendations below this score are not worth showing. */
 export { MIN_RECOMMENDED_SCORE } from './scorer';
@@ -29,7 +30,7 @@ function pathIds(loc: unknown): string[] {
 
 const jobSelect = {
   id: true, embedding: true, categoryId: true, employmentType: true, workMode: true, minExperienceYears: true, requiredEducationLevel: true,
-  salaryMin: true, salaryMax: true, startDate: true, lat: true, lng: true,
+  salaryMin: true, salaryMax: true, payBasis: true, startDate: true, lat: true, lng: true,
   location: locChain,
   skills: { select: { skillId: true, importance: true, minProficiency: true, skill: { select: { nameEn: true } } } },
   criteria: { select: { criterionId: true, importance: true, value: true, criterion: { select: { key: true, labelEn: true, type: true, options: true, isActive: true } } } },
@@ -53,7 +54,9 @@ type WorkerRow = Prisma.WorkerProfileGetPayload<{ select: typeof workerSelect }>
 const toJob = (j: JobRow): JobFeatures => ({
   id: j.id, categoryId: j.categoryId, employmentType: j.employmentType, workMode: j.workMode,
   minExperienceYears: j.minExperienceYears, requiredEducationLevel: j.requiredEducationLevel,
-  salaryMin: j.salaryMin, salaryMax: j.salaryMax, startDate: j.startDate, lat: j.lat, lng: j.lng,
+  // A worker's expected salary is per month, so pay counted per day or hour is brought to a month first; pay that is not a fixed
+  // amount over time is left out of the comparison instead of being read as a tiny or huge monthly salary.
+  salaryMin: monthlyEquivalent(j.salaryMin, j.payBasis), salaryMax: monthlyEquivalent(j.salaryMax, j.payBasis), startDate: j.startDate, lat: j.lat, lng: j.lng,
   locationPath: pathIds(j.location),
   skills: j.skills.map((s) => ({ skillId: s.skillId, name: s.skill.nameEn, importance: s.importance, minProficiency: s.minProficiency })),
   embedding: j.embedding.length ? j.embedding : null,
@@ -163,6 +166,18 @@ export async function recommendWorkers(jobId: string, limit: number): Promise<Ra
 }
 
 /** Open jobs that could fit the worker, best first. */
+/** Scores one worker against several jobs (the job list). Same calculation as the full match, nothing is stored. */
+export async function scoreJobsForWorker(workerId: string, jobIds: string[]): Promise<Map<string, MatchResult>> {
+  const out = new Map<string, MatchResult>();
+  if (!jobIds.length) return out;
+  const [worker, jobs, relations] = await Promise.all([loadWorker(workerId), loadJobs(jobIds), getRelations()]);
+  for (const j of jobs) {
+    const { weights } = await getWeights(j.categoryId);
+    out.set(j.id, matchPair(j, worker, weights, relations));
+  }
+  return out;
+}
+
 export async function recommendJobs(workerId: string, limit: number): Promise<{ items: RankedJob[]; reason: 'ok' | 'no_profile_data' }> {
   const worker = await loadWorker(workerId);
   if (worker.skills.length === 0 && !worker.categoryId) return { items: [], reason: 'no_profile_data' };

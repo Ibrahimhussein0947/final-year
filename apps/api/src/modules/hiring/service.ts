@@ -2,6 +2,8 @@ import type { OrganizationType } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { AppError, badRequest, notFound } from '../../lib/errors';
+// Kept here, not imported from ./steps, which imports this file (a cycle would leave it undefined when the schema below is built).
+const STEP_KEYS = ['ID_VERIFIED', 'WRITTEN_EXAM', 'PRACTICAL_TEST', 'SCORE_SHEET', 'REFERENCE_CHECKED', 'GUARANTOR_RECORDED'] as const;
 
 /**
  * Hiring rules by organization type. How a vacancy may be announced and how a candidate may be selected depends on what
@@ -21,9 +23,15 @@ export interface Policy {
   requireReference: boolean;
   requireDecisionNote: boolean;
   requireInterview: boolean;
+  /** The recruitment methods: steps recorded before a candidate can be accepted (required) or shown as good practice (suggested). */
+  requiredSteps: string[];
+  suggestedSteps: string[];
+  panelSize: number;
+  maxProbationDays: number | null;
+  appealDays: number;
 }
 
-const FIELDS = ['label', 'minAnnouncementDays', 'requireVerified', 'requireDeadline', 'requireSalary', 'requireReference', 'requireDecisionNote', 'requireInterview'] as const;
+const FIELDS = ['label', 'minAnnouncementDays', 'requireVerified', 'requireDeadline', 'requireSalary', 'requireReference', 'requireDecisionNote', 'requireInterview', 'requiredSteps', 'suggestedSteps', 'panelSize', 'maxProbationDays', 'appealDays'] as const;
 
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; value: Policy }>();
@@ -31,6 +39,7 @@ export const clearPolicyCache = () => cache.clear();
 
 export const noRules = (organizationType: OrganizationType): Policy => ({
   organizationType, label: null, minAnnouncementDays: 0, requireVerified: false, requireDeadline: false, requireSalary: false, requireReference: false, requireDecisionNote: false, requireInterview: false,
+  requiredSteps: [], suggestedSteps: [], panelSize: 1, maxProbationDays: null, appealDays: 0,
 });
 
 export async function getPolicy(type: OrganizationType): Promise<Policy> {
@@ -98,6 +107,11 @@ export const rulesView = (p: Policy, job: { deadline: Date | null }) => ({
   label: p.label,
   requireDecisionNote: p.requireDecisionNote,
   requireInterview: p.requireInterview,
+  requiredSteps: p.requiredSteps,
+  suggestedSteps: p.suggestedSteps,
+  panelSize: p.panelSize,
+  maxProbationDays: p.maxProbationDays,
+  appealDays: p.appealDays,
   announcementClosesAt: p.minAnnouncementDays > 0 ? job.deadline : null,
 });
 
@@ -113,6 +127,11 @@ export const policyUpdateSchema = z
     requireReference: z.boolean().optional(),
     requireDecisionNote: z.boolean().optional(),
     requireInterview: z.boolean().optional(),
+    requiredSteps: z.array(z.enum(STEP_KEYS)).max(STEP_KEYS.length).optional(),
+    suggestedSteps: z.array(z.enum(STEP_KEYS)).max(STEP_KEYS.length).optional(),
+    panelSize: z.number().int().min(1).max(9).optional(),
+    maxProbationDays: z.number().int().min(0).max(365).nullable().optional(),
+    appealDays: z.number().int().min(0).max(60).optional(),
   })
   .strict();
 
@@ -138,10 +157,12 @@ export async function listPolicies() {
 export async function updatePolicy(type: string, input: z.infer<typeof policyUpdateSchema>, adminId: string) {
   if (!(ORGANIZATION_TYPES as readonly string[]).includes(type)) throw notFound('Unknown organization type');
   const t = type as OrganizationType;
+  // A step cannot be both required and merely suggested: required wins.
+  const clean = { ...input, ...(input.requiredSteps && input.suggestedSteps ? { suggestedSteps: input.suggestedSteps.filter((s) => !input.requiredSteps!.includes(s)) } : {}) };
   await prisma.hiringPolicy.upsert({
     where: { organizationType: t },
-    update: { ...input, updatedById: adminId },
-    create: { organizationType: t, ...input, updatedById: adminId },
+    update: { ...clean, updatedById: adminId },
+    create: { organizationType: t, ...clean, updatedById: adminId },
   });
   clearPolicyCache();
 }

@@ -25,6 +25,24 @@ const schema = z.object({
   SMS_GATEWAY_URL: z.string().url().optional(),
   SMS_GATEWAY_TOKEN: z.string().min(8).optional(),
   SMS_SENDER_ID: z.string().max(11).optional(),
+  // Optional Africa's Talking SMS (takes priority over the generic gateway when both are set). AT_SANDBOX=true uses their test servers.
+  AT_USERNAME: z.string().min(1).optional(),
+  AT_API_KEY: z.string().min(8).optional(),
+  AT_SANDBOX: bool.default('false'),
+  // Optional transactional email through Resend. EMAIL_FROM must be an address on a domain verified at Resend.
+  RESEND_API_KEY: z.string().min(8).optional(),
+  EMAIL_FROM: z.string().min(3).max(200).optional(),
+  // Optional Telegram bot for alerts. Needs the bot token from @BotFather, its username, and a secret you invent that
+  // Telegram sends back with every webhook call (see src/scripts/telegram-webhook.ts). Unset = Telegram alerts are off.
+  TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
+  TELEGRAM_BOT_USERNAME: z.string().regex(/^[A-Za-z0-9_]{3,64}$/, 'bot username without the @').optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().regex(/^[A-Za-z0-9_-]{16,256}$/, 'use 16 to 256 letters, digits, _ or -').optional(),
+  // The public address of the website (used for links inside alerts). Optional.
+  PUBLIC_URL: z.string().url().optional(),
+  // Optional ClamAV daemon for scanning uploads. Unset = no scanning. CLAMAV_REQUIRED=true refuses uploads when it cannot be reached.
+  CLAMAV_HOST: z.string().min(1).optional(),
+  CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  CLAMAV_REQUIRED: bool.default('false'),
   // Optional Python AI service. Unset = semantic matching is off and everything uses the rule-based score.
   AI_SERVICE_URL: z.string().url().optional(),
   AI_SERVICE_TOKEN: z.string().min(24).optional(),
@@ -52,7 +70,8 @@ export const env = {
   ...parsed.data,
   reviewUnverifiedJobs: parsed.data.REVIEW_UNVERIFIED_JOBS,
   corsOrigins: parsed.data.CORS_ORIGINS.split(',').map((s) => s.trim()),
-  videoBaseUrl: parsed.data.VIDEO_BASE_URL ? parsed.data.VIDEO_BASE_URL.replace(/\/+$/, '') : null,
+  publicUrl: parsed.data.PUBLIC_URL ? parsed.data.PUBLIC_URL.replace(/\/+$/, '') : null,
+  videoBaseUrl:parsed.data.VIDEO_BASE_URL ? parsed.data.VIDEO_BASE_URL.replace(/\/+$/, '') : null,
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
   cookieSecure: parsed.data.COOKIE_SECURE ?? parsed.data.NODE_ENV === 'production',

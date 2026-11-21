@@ -5,12 +5,14 @@ import { forbidden, notFound } from '../../lib/errors';
 import { requireAuth } from '../../middleware/auth';
 import { filePathOf } from './storage';
 import { employerMayReadCv } from '../applications/service';
+import { employerMayViewPortfolio } from '../workers/portfolio';
 
 /**
  * Downloads go through authorization; uploaded files are never served statically.
  * - Profile photos: any signed-in user.
  * - Everything else (CVs, evidence, certificates): the owner or an admin.
  *   (Employers get access to a CV only after an application exists; added with applications in Phase 7.)
+ * - Portfolio pictures: also employers, while the worker's profile is visible.
  */
 export function filesRouter() {
   const router = Router();
@@ -25,7 +27,11 @@ export function filesRouter() {
       file.ownerId === req.user!.id ||
       req.user!.role === 'ADMIN' ||
       // Employers may read a CV or a supporting document only while its owner has an active application to one of their jobs.
-      ((file.kind === 'CV' || file.kind === 'CERTIFICATE') && req.user!.role === 'EMPLOYER' && (await employerMayReadCv(req.user!.id, file.id)));
+      // VERIFICATION_EVIDENCE is included only for experience letters: employerMayReadCv matches the file against the worker's own
+      // CV, education, certification, activity and experience records, so identity documents (never linked there) stay private.
+      ((file.kind === 'CV' || file.kind === 'CERTIFICATE' || file.kind === 'VERIFICATION_EVIDENCE') && req.user!.role === 'EMPLOYER' && (await employerMayReadCv(req.user!.id, file.id))) ||
+      // Portfolio pictures are part of a visible public profile.
+      (file.kind === 'PORTFOLIO' && req.user!.role === 'EMPLOYER' && (await employerMayViewPortfolio(file.id)));
     if (!allowed) throw forbidden();
     res
       .set({

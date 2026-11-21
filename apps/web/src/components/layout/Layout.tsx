@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 const NAV = [
   { to: '/jobs', key: 'nav.jobs' },
   { to: '/workers', key: 'nav.workers' },
+  { to: '/services', key: 'nav.services' },
   { to: '/categories', key: 'nav.categories' },
   { to: '/how-it-works', key: 'nav.how' },
   { to: '/about', key: 'nav.about' },
@@ -84,6 +85,9 @@ function AuthButtons({ mobile }: { mobile?: boolean }) {
         )}
         {user.role === 'ADMIN' && (
           <LinkButton to="/admin" variant={mobile ? 'outline' : 'ghost'} size="sm" className={grow}>Admin</LinkButton>
+        )}
+        {(user.role === 'WORKER' || user.role === 'EMPLOYER') && (
+          <LinkButton to="/documents" variant={mobile ? 'outline' : 'ghost'} size="sm" className={grow}>Documents</LinkButton>
         )}
         {(user.role === 'WORKER' || user.role === 'EMPLOYER') && (
           <LinkButton to="/interviews" variant={mobile ? 'outline' : 'ghost'} size="sm" className={grow}>Interviews</LinkButton>

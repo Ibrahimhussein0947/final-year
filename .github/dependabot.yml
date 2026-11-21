@@ -1,0 +1,27 @@
+# Weekly update pull requests. Minor and patch updates are grouped so they arrive as one PR per ecosystem; major versions
+# (for example the zod and react-router upgrades noted in docs/06-testing-and-evaluation.md) come separately so they can be
+# reviewed on their own. Every update runs through the CI workflow before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule: { interval: weekly }
+  - package-ecosystem: pip
+    directory: /apps/ai
+    schedule: { interval: weekly }
+    groups:
+      pip-minor-and-patch:
+        update-types: [minor, patch]

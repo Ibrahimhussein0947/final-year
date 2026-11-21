@@ -154,10 +154,17 @@ export async function listConversations(userId: string) {
   const convs = await prisma.conversation.findMany({
     where: { participants: { some: { userId } } },
     select: {
-      id: true, applicationId: true, invitationId: true,
+      id: true, applicationId: true, invitationId: true, serviceInquiryId: true,
       messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { body: true, senderId: true, createdAt: true } },
     },
   });
+  // Chats that began when a provider accepted a service inquiry: both sides see the other person and the service title.
+  const svcIds = convs.map((c) => c.serviceInquiryId).filter((x): x is string => !!x);
+  const svcInquiries = await prisma.serviceInquiry.findMany({
+    where: { id: { in: svcIds } },
+    select: { id: true, customerId: true, customer: { select: { fullName: true } }, service: { select: { id: true, title: true, worker: { select: { userId: true, user: { select: { fullName: true } } } } } } },
+  });
+  const bySvc = new Map(svcInquiries.map((i) => [i.id, i]));
   const appIds = convs.map((c) => c.applicationId).filter((x): x is string => !!x);
   const apps = await prisma.application.findMany({
     where: { id: { in: appIds } },
@@ -185,6 +192,22 @@ export async function listConversations(userId: string) {
   const unreadBy = new Map(unread.map((u) => [u.conversationId, u._count]));
 
   const items = convs.map((c) => {
+    const svc = c.serviceInquiryId ? bySvc.get(c.serviceInquiryId) : undefined;
+    if (svc) {
+      const iAmCustomer = svc.customerId === userId;
+      const last = c.messages[0] ?? null;
+      return {
+        id: c.id,
+        applicationId: null,
+        beforeApplying: false,
+        readOnly: false,
+        with: { name: iAmCustomer ? svc.service.worker.user.fullName : svc.customer.fullName, role: iAmCustomer ? 'PROVIDER' : 'CUSTOMER' } as { name: string; role: string },
+        job: null,
+        service: { id: svc.service.id, title: svc.service.title },
+        lastMessage: last ? { preview: clip(last.body.replace(/\s+/g, ' '), 100), mine: last.senderId === userId, createdAt: last.createdAt } : null,
+        unread: unreadBy.get(c.id) ?? 0,
+      };
+    }
     const a = c.applicationId ? byApp.get(c.applicationId) : (c.invitationId ? byInv.get(c.invitationId) : undefined);
     const iAmWorker = a?.worker.userId === userId;
     const last = c.messages[0] ?? null;
@@ -198,6 +221,7 @@ export async function listConversations(userId: string) {
       // Workers see the organization; employers see the worker's name. Never a phone number or email.
       with: a ? { name: iAmWorker ? a.job.organization.name : a.worker.user.fullName, role: iAmWorker ? 'EMPLOYER' : 'WORKER' } : null,
       job: a ? { id: a.job.id, title: a.job.title } : null,
+      service: null as { id: string; title: string } | null,
       lastMessage: last ? { preview: clip(last.body.replace(/\s+/g, ' '), 100), mine: last.senderId === userId, createdAt: last.createdAt } : null,
       unread: unreadBy.get(c.id) ?? 0,
     };

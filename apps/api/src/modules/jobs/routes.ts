@@ -9,6 +9,7 @@ import { validateBody } from '../../middleware/common';
 import { jobCreateSchema, jobUpdateSchema, listQuerySchema, publishSchema } from './schema';
 import * as svc from './service';
 import { viewerState } from '../applications/service';
+import { salaryGuide, salaryGuideQuery } from './salaryGuide';
 
 const uuid = z.string().uuid();
 const jobId = (req: Request) => {
@@ -42,8 +43,8 @@ export function jobsRouter() {
   router.post('/:id/publish', ...employer, validateBody(publishSchema), async (req, res) => {
     const orgId = await svc.orgIdFor(req.user!.id);
     const result = await svc.publishJob(orgId, req.user!.id, jobId(req), req.body.confirmNotDuplicate);
-    await audit(req, req.user!.id, result.flaggedAsCopy ? 'job.published_flagged_copy' : 'job.published', 'Job', jobId(req), { status: result.status });
-    res.json({ job: await svc.getJob(jobId(req), req.user), flaggedAsCopy: result.flaggedAsCopy });
+    await audit(req, req.user!.id, result.flaggedAsCopy ? 'job.published_flagged_copy' : result.flaggedAsRisky ? 'job.published_flagged_risky' : 'job.published', 'Job', jobId(req), { status: result.status });
+    res.json({ job: await svc.getJob(jobId(req), req.user), flaggedAsCopy: result.flaggedAsCopy, flaggedAsRisky: result.flaggedAsRisky });
   });
 
   router.post('/:id/close', ...employer, validateBody(z.object({ filled: z.boolean().optional() }).default({})), async (req, res) => {
@@ -70,6 +71,13 @@ export function jobsRouter() {
     const q = listQuerySchema.safeParse(req.query);
     if (!q.success) throw badRequest('Invalid search', q.error.flatten().fieldErrors);
     res.json(await svc.searchJobs(q.data));
+  });
+
+  // What similar jobs offer: aggregated posted pay for one category, narrowed to the person's area when there is enough data.
+  router.get('/salary-guide', async (req, res) => {
+    const q = salaryGuideQuery.safeParse(req.query);
+    if (!q.success) throw badRequest('Choose a job category', q.error.flatten().fieldErrors);
+    res.json(await salaryGuide(q.data));
   });
 
   router.get('/:id', optionalAuth, async (req, res) => {

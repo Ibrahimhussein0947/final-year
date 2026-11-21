@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 const TABS: [string, string][] = [
   ['/admin', 'Overview'], ['/admin/users', 'Users'], ['/admin/verification', 'Verification'], ['/admin/moderation', 'Moderation'],
   ['/admin/taxonomy', 'Skills and categories'], ['/admin/criteria', 'Sector criteria'], ['/admin/hiring', 'Hiring rules'], ['/admin/organizations', 'Organizations'], ['/admin/translations', 'Translations'], ['/admin/matching', 'Matching and AI'],
-  ['/admin/analytics', 'Analytics and reports'], ['/admin/audit', 'Activity log'], ['/admin/plans', 'Subscriptions'], ['/admin/training', 'Training'], ['/admin/team', 'Administrators'],
+  ['/admin/performance', 'Performance'], ['/admin/analytics', 'Analytics and reports'], ['/admin/audit', 'Activity log'], ['/admin/plans', 'Subscriptions'], ['/admin/training', 'Training'], ['/admin/places', 'Places'], ['/admin/team', 'Administrators'],
 ];
 
 export function AdminLayout() {

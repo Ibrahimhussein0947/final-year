@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Printer } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
+import { fetchBlobUrl } from '@/lib/api';
 import { Alert, Card, Skeleton } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
@@ -154,6 +155,26 @@ export default function CvBuilderPage() {
   const [showPhoto, setShowPhoto] = useState(false);
   const [show, setShow] = useState<Record<SectionKey, boolean>>(() => Object.fromEntries(SECTIONS.map(([k]) => [k, true])) as Record<SectionKey, boolean>);
   const thin = useMemo(() => (q.data ? q.data.completion.pct < 40 : false), [q.data]);
+  const [lang, setLang] = useState<'en' | 'am' | 'om'>(user?.locale ?? 'en');
+  const [downloading, setDownloading] = useState(false);
+  const [dlError, setDlError] = useState<string | null>(null);
+
+  async function downloadPdf() {
+    setDownloading(true);
+    setDlError(null);
+    try {
+      const url = await fetchBlobUrl(`/api/v1/workers/me/cv.pdf?lang=${lang}`);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my-cv.pdf';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setDlError('Could not create the PDF. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <>
@@ -192,10 +213,26 @@ export default function CvBuilderPage() {
                     </label>
                   </div>
                 </fieldset>
-                <Button variant="accent" className="w-full" onClick={() => window.print()}>
-                  <Printer className="mr-2 h-4 w-4" aria-hidden /> Print or save as PDF
+                <fieldset className="space-y-2 border-t border-border pt-4">
+                  <legend className="text-sm font-semibold">Download as a PDF file</legend>
+                  <label className="block text-sm">
+                    <span className="sr-only">CV language</span>
+                    <select value={lang} onChange={(e) => setLang(e.target.value as 'en' | 'am' | 'om')} className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm">
+                      <option value="en">English</option>
+                      <option value="am">አማርኛ (Amharic)</option>
+                      <option value="om">Afaan Oromoo</option>
+                    </select>
+                  </label>
+                  <Button variant="accent" className="w-full" loading={downloading} onClick={downloadPdf}>
+                    <Download className="mr-2 h-4 w-4" aria-hidden /> Download PDF
+                  </Button>
+                  {dlError && <Alert tone="danger">{dlError}</Alert>}
+                  <p className="text-xs text-muted">Made on our server from your saved profile, so save any profile changes first. This file always includes your phone and email and marks only verified items as verified.</p>
+                </fieldset>
+                <Button variant="outline" className="w-full" onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" aria-hidden /> Print this page instead
                 </Button>
-                <p className="text-xs text-muted">In the print window choose “Save as PDF” as the printer. Skills and certificates not yet verified are shown as you wrote them.</p>
+                <p className="text-xs text-muted">Printing uses the style and choices above. In the print window choose “Save as PDF” as the printer. Skills and certificates not yet verified are shown as you wrote them.</p>
               </Card>
               {thin && (
                 <Alert tone="warning">

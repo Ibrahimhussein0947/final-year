@@ -7,8 +7,10 @@ export interface ConversationItem {
   /** The worker started this from an invitation and has not applied yet. */
   beforeApplying?: boolean;
   readOnly: boolean;
-  with: { name: string; role: 'WORKER' | 'EMPLOYER' } | null;
+  with: { name: string; role: 'WORKER' | 'EMPLOYER' | 'PROVIDER' | 'CUSTOMER' } | null;
   job: { id: string; title: string } | null;
+  /** A chat that began when a provider accepted a service request. */
+  service?: { id: string; title: string } | null;
   lastMessage: { preview: string; mine: boolean; createdAt: string } | null;
   unread: number;
 }
@@ -35,6 +37,6 @@ export async function openConversation(applicationId: string): Promise<string> {
   return (await api<{ conversationId: string }>(`/applications/${applicationId}/conversation`, { method: 'POST' })).conversationId;
 }
 
-export interface NotificationSettings { notifyJobMatches: boolean; notifySms: boolean; phoneVerified: boolean; smsProviderConfigured: boolean; autoApply: boolean; autoApplyMinScore: number }
+export interface NotificationSettings { notifyJobMatches: boolean; notifySms: boolean; phoneVerified: boolean; smsProviderConfigured: boolean; telegramConfigured: boolean; telegramLinked: boolean; notifyTelegram: boolean; autoApply: boolean; autoApplyMinScore: number }
 export const useNotificationSettings = () =>
   useQuery({ queryKey: ['notification-settings'], queryFn: () => api<NotificationSettings>('/notifications/settings') });

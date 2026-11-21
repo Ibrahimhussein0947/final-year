@@ -1,8 +1,10 @@
 import { ORG_GROUPS, type OrgGroup } from '../hiring/catalog';
+import { SEGMENTS } from './segments';
 import { z } from 'zod';
 import { jobCriterionInput } from '../criteria/service';
 
-export const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'TEMPORARY', 'CONTRACT', 'FREELANCE', 'INTERNSHIP', 'SEASONAL', 'DAILY'] as const;
+import { BENEFIT_TAGS, EMPLOYMENT_TYPES, OPEN_TO, PAY_BASES, RECRUITMENT_METHODS, SENIORITY_LEVELS, WORKPLACES } from './classification';
+export { EMPLOYMENT_TYPES };
 export const WORK_MODES = ['ON_SITE', 'REMOTE', 'HYBRID'] as const;
 const EDUCATION_LEVELS = ['NONE', 'PRIMARY', 'SECONDARY', 'VOCATIONAL_CERTIFICATE', 'DIPLOMA', 'BACHELOR', 'MASTER', 'DOCTORATE'] as const;
 
@@ -30,6 +32,14 @@ export const jobBaseSchema = z.object({
   categoryId: z.string().uuid(),
   employmentType: z.enum(EMPLOYMENT_TYPES),
   workMode: z.enum(WORK_MODES).default('ON_SITE'),
+  seniority: z.enum(SENIORITY_LEVELS).nullable().optional(),
+  /** Groups the employer welcomes. A tag for searching; it never excludes anyone. */
+  openTo: z.array(z.enum(OPEN_TO)).max(OPEN_TO.length).default([]).transform((v) => [...new Set(v)]),
+  workplace: z.enum(WORKPLACES).nullable().optional(),
+  recruitmentMethod: z.enum(RECRUITMENT_METHODS).nullable().optional(),
+  /** What salaryMin and salaryMax count: per month, day, hour... Empty means monthly. */
+  payBasis: z.enum(PAY_BASES).nullable().optional(),
+  benefitTags: z.array(z.enum(BENEFIT_TAGS)).max(BENEFIT_TAGS.length).default([]).transform((v) => [...new Set(v)]),
   salaryMin: z.number().int().min(0).max(10_000_000).nullable().optional(),
   salaryMax: z.number().int().min(0).max(10_000_000).nullable().optional(),
   vacancies: z.number().int().min(1).max(1000).default(1),
@@ -92,6 +102,16 @@ export const listQuerySchema = z.object({
   verifiedOnly: z.enum(['true', 'false']).optional(),
   /** Kind of employer: business, public, nonprofit, individual, agency or institution. */
   employerGroup: z.enum(ORG_GROUPS as [OrgGroup, ...OrgGroup[]]).optional(),
+  seniority: z.enum(SENIORITY_LEVELS).optional(),
+  workplace: z.enum(WORKPLACES).optional(),
+  recruitmentMethod: z.enum(RECRUITMENT_METHODS).optional(),
+  payBasis: z.enum(PAY_BASES).optional(),
+  /** Jobs that offer this benefit. */
+  benefit: z.enum(BENEFIT_TAGS).optional(),
+  /** Jobs that welcome this group (see classification.ts OPEN_TO). */
+  openTo: z.enum(OPEN_TO).optional(),
+  /** Part of the market: formal, informal, flexible or self_employment (see segments.ts). */
+  segment: z.enum(SEGMENTS).optional(),
   /** Only jobs that state a salary (many do not; a missing salary is "not stated", never treated as zero). */
   hasSalary: z.enum(['true', 'false']).optional(),
   /** Flexible work: part-time, temporary, daily, seasonal or freelance work, or remote/hybrid, or a stated flexible schedule. */

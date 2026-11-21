@@ -1,7 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { categories, defaultWeights, regions, relations, skills } from './data';
 import { criteria } from './criteria';
 import { hiringPolicies } from './policies';
+import { skillTests } from './skillTests';
 
 const prisma = new PrismaClient();
 
@@ -103,6 +104,16 @@ async function seedPlans() {
   for (const p of plans) await prisma.subscriptionPlan.create({ data: p });
 }
 
+async function seedSkillTests() {
+  // Create only what is missing: an administrator's edits to a test are never overwritten.
+  for (const t of skillTests) {
+    const skill = await prisma.skill.findUnique({ where: { slug: t.skillSlug }, select: { id: true } });
+    if (!skill) throw new Error(`Unknown skill in skill tests seed: ${t.skillSlug}`);
+    if (await prisma.skillTest.findUnique({ where: { skillId: skill.id }, select: { id: true } })) continue;
+    await prisma.skillTest.create({ data: { skillId: skill.id, title: t.title, description: t.description, passPercent: t.passPercent, questionsAsked: t.questionsAsked, questions: t.questions as unknown as Prisma.InputJsonValue } });
+  }
+}
+
 async function main() {
   await seedLocations();
   await seedTaxonomy();
@@ -110,6 +121,7 @@ async function main() {
   await seedCriteria();
   await seedPolicies();
   await seedPlans();
+  await seedSkillTests();
   const [loc, cat, sk, rel, crit] = await Promise.all([
     prisma.location.count(),
     prisma.category.count(),

@@ -16,6 +16,7 @@ import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useAuth } from '@/app/auth';
 import { useI18n } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
+import { DocumentsSummary } from '@/components/DocumentsSummary';
 
 function PhoneVerification() {
   const { t } = useI18n();
@@ -189,6 +190,21 @@ function NotificationSettingsCard({ role }: { role: 'WORKER' | 'EMPLOYER' }) {
     onSuccess: (d) => { setError(null); qc.setQueryData(['notification-settings'], d); },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not save. Try again.'),
   });
+  const [linkSent, setLinkSent] = useState(false);
+  const connect = useMutation({
+    mutationFn: () => api<{ url: string; expiresAt: string }>('/notifications/telegram/link', { method: 'POST' }),
+    onSuccess: (d) => {
+      setError(null);
+      setLinkSent(true);
+      window.open(d.url, '_blank', 'noopener,noreferrer'); // opens Telegram; the person presses Start there
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not start the connection. Try again.'),
+  });
+  const disconnect = useMutation({
+    mutationFn: () => api('/notifications/telegram', { method: 'DELETE' }),
+    onSuccess: () => { setError(null); setLinkSent(false); qc.invalidateQueries({ queryKey: ['notification-settings'] }); },
+    onError: () => setError('Could not disconnect. Try again.'),
+  });
   const s = q.data;
   return (
     <Card className="p-6">
@@ -228,6 +244,28 @@ function NotificationSettingsCard({ role }: { role: 'WORKER' | 'EMPLOYER' }) {
               {!s.smsProviderConfigured && <span className="mt-1 block text-xs text-warning">SMS delivery is not set up on this system yet, so no text messages are sent. You will still see everything in the app.</span>}
             </span>
           </label>
+          {role === 'WORKER' && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="font-medium">Telegram alerts</p>
+              <p className="mt-1 text-xs text-muted">Short, generic alerts in Telegram for new matching jobs, interviews, offers and important application updates. At most 10 a day. They never contain text written by other people.</p>
+              {!s.telegramConfigured && <p className="mt-2 text-xs text-warning">Telegram alerts are not set up on this system yet.</p>}
+              {s.telegramConfigured && s.telegramLinked && (
+                <div className="mt-3 space-y-2">
+                  <label className="flex items-start gap-3">
+                    <input type="checkbox" className="mt-1 h-4 w-4" checked={s.notifyTelegram} disabled={save.isPending} onChange={(e) => save.mutate({ notifyTelegram: e.target.checked })} />
+                    <span>Send me alerts on Telegram</span>
+                  </label>
+                  <Button variant="outline" size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>Disconnect Telegram</Button>
+                </div>
+              )}
+              {s.telegramConfigured && !s.telegramLinked && (
+                <div className="mt-3 space-y-2">
+                  <Button variant="outline" size="sm" loading={connect.isPending} onClick={() => connect.mutate()}>Connect Telegram</Button>
+                  {linkSent && <p className="text-xs text-muted" role="status">Telegram should have opened. Press <strong>Start</strong> there within 15 minutes, then come back to this page. You can also send /stop to the bot any time to turn alerts off.</p>}
+                </div>
+              )}
+            </div>
+          )}
           {error && <p role="alert" className="text-danger">{error}</p>}
         </div>
       )}
@@ -258,10 +296,15 @@ function Overview({ role }: { role: 'WORKER' | 'EMPLOYER' }) {
                 <LinkButton to="/applications" variant="outline" size="sm">Track applications</LinkButton>
                 <LinkButton to="/saved" variant="outline" size="sm">Saved jobs</LinkButton>
                 <LinkButton to="/jobs" variant="accent" size="sm">Browse jobs</LinkButton>
+                <LinkButton to="/my-services" variant="outline" size="sm">My services</LinkButton>
               </>
             ) : (
-              <LinkButton to="/employer/jobs" variant="accent" size="sm">Manage jobs</LinkButton>
+              <>
+                <LinkButton to="/employer/jobs" variant="accent" size="sm">Manage jobs</LinkButton>
+                <LinkButton to="/services" variant="outline" size="sm">Find a service</LinkButton>
+              </>
             )}
+            <LinkButton to="/service-requests" variant="outline" size="sm">Service requests</LinkButton>
           </div>
         </div>
         {summary.isLoading && <Skeleton className="mt-4 h-20" />}
@@ -316,6 +359,7 @@ export default function Dashboard() {
       <PageHeader title={`${t('dash.welcome')}, ${user.fullName}`} subtitle={t('dash.title')} />
       <PageBody narrow>
         <div className="space-y-5">
+          {(user.role === 'WORKER' || user.role === 'EMPLOYER') && <DocumentsSummary />}
           <Card className="p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="accent">{roleLabel}</Badge>

@@ -35,7 +35,7 @@ export function useSavedSearchActions() {
 export function describeFilters(f: Record<string, string | number>): string {
   const label: Record<string, string> = {
     q: 'Words', region: 'Region', category: 'Category', type: 'Type', mode: 'Arrangement', minSalary: 'Min salary', language: 'Language',
-    postedWithin: 'Posted within (days)', maxExperience: 'Max experience (yrs)', maxEducation: 'Schooling', employerGroup: 'Employer',
+    postedWithin: 'Posted within (days)', maxExperience: 'Max experience (yrs)', maxEducation: 'Schooling', employerGroup: 'Employer', segment: 'Job market', seniority: 'Level', openTo: 'Welcomes', payBasis: 'Pay counted', workplace: 'Workplace', benefit: 'Benefit',
   };
   const parts = Object.entries(f).map(([k, v]) => {
     if (v === 'true') return label[k] ?? k.replace(/([A-Z])/g, ' $1').toLowerCase();

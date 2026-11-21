@@ -66,5 +66,9 @@ export function describeRules(p: Policy): string[] {
   if (p.requireSalary) rules.push('The salary or pay-scale range must be stated.');
   if (p.requireInterview) rules.push('An interview must be recorded before a candidate is accepted.');
   if (p.requireDecisionNote) rules.push('A written reason (at least 10 characters) is required to accept or reject a candidate.');
+  const names: Record<string, string> = { ID_VERIFIED: "the candidate's ID is verified on the platform", WRITTEN_EXAM: 'a written exam result is recorded', PRACTICAL_TEST: 'a practical skills test result is recorded',SCORE_SHEET: p.panelSize > 1 ? `${p.panelSize} different selection panel members each record a score sheet` : 'a selection panel score sheet is recorded', REFERENCE_CHECKED: 'a reference check is recorded', GUARANTOR_RECORDED: 'a guarantor is recorded' };
+  if (p.requiredSteps.length) rules.push(`Before a candidate is accepted: ${p.requiredSteps.map((s) => names[s] ?? s).join('; ')}.`);
+  if (p.maxProbationDays !== null && p.maxProbationDays !== undefined) rules.push(`An offer may state a probation period of at most ${p.maxProbationDays} days.`);
+  if (p.appealDays > 0) rules.push(`A rejected candidate may ask for a review within ${p.appealDays} days, and you must answer in writing.`);
   return rules;
 }

@@ -239,6 +239,47 @@ interface National {
 }
 const cell = (n: number | null) => (n === null ? <span className="text-muted" title="Hidden: fewer than 5">&lt;5</span> : n);
 
+interface Fairness {
+  poolSize: number; firstPage: number; overallShownRate: number | null; notes: string[];
+  attributes: { attribute: string; hiddenSmallGroups: number; groups: { group: string; people: number; inFirstPage: number; shownRate: number; ratioToBest: number; flagged: boolean }[] }[];
+}
+
+/** Are some groups of workers rarely in the first page of an employer's worker search? */
+function SearchFairness() {
+  const q = useAdminQuery<Fairness>(['search-fairness'], '/analytics/search-fairness');
+  const f = q.data;
+  return (
+    <Card className="overflow-x-auto p-5">
+      <h2 className="font-semibold">Worker search: who is shown first?</h2>
+      {q.isLoading && <Skeleton className="mt-3 h-24" />}
+      {q.isError && <Alert tone="danger">Could not load the fairness check.</Alert>}
+      {f && (
+        <>
+          <p className="mt-1 text-sm">
+            {f.overallShownRate === null ? `${f.poolSize} visible workers so far.` : `${f.poolSize} visible workers; the first page shows ${f.firstPage} of them (${Math.round(f.overallShownRate * 100)}%).`}
+          </p>
+          {f.attributes.map((a) => (
+            <table key={a.attribute} className="mt-4 w-full text-left text-sm">
+              <caption className="pb-1 text-left font-medium">{a.attribute}</caption>
+              <thead><tr className="border-b border-border text-muted"><th className="py-2">Group</th><th>People</th><th>In first page</th><th>Compared with the best group</th></tr></thead>
+              <tbody>
+                {a.groups.map((g) => (
+                  <tr key={g.group} className="border-b border-border last:border-0">
+                    <td className="py-2">{g.group}</td><td>{g.people}</td><td>{g.inFirstPage} ({Math.round(g.shownRate * 100)}%)</td>
+                    <td>{Math.round(g.ratioToBest * 100)}% {g.flagged && <span className="ml-1 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">Look into this</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {a.hiddenSmallGroups > 0 && <tfoot><tr><td colSpan={4} className="pt-1 text-xs text-muted">{a.hiddenSmallGroups} smaller {a.hiddenSmallGroups === 1 ? 'group is' : 'groups are'} hidden (fewer than 5 people).</td></tr></tfoot>}
+            </table>
+          ))}
+          <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-muted">{f.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function AdminAnalytics() {
   const q = useAdminQuery<National>(['national'], '/analytics/national');
   const [dlError, setDlError] = useState<string | null>(null);
@@ -273,6 +314,7 @@ export function AdminAnalytics() {
             <Card className="p-5"><h2 className="font-semibold">Popular occupations (workers)</h2>
               <ol className="mt-3 space-y-1 text-sm">{n.popularOccupations.length === 0 && <li className="text-muted">Not enough workers share an occupation yet (minimum {n.k}).</li>}{n.popularOccupations.map((o) => <li key={o.occupation} className="flex justify-between"><span>{o.occupation}</span><span>{o.workers}</span></li>)}</ol></Card>
           </div>
+          <SearchFairness />
           <Card className="overflow-x-auto p-5"><h2 className="font-semibold">Application outcomes</h2>
             <p className="mt-1 text-sm">Overall success rate: <strong>{n.applicationOutcomes.successRate === null ? 'not enough decided applications yet' : `${n.applicationOutcomes.successRate}%`}</strong> ({n.applicationOutcomes.decided} decided)</p>
             <table className="mt-3 w-full text-left text-sm"><thead><tr className="border-b border-border text-muted"><th className="py-2">Category</th><th>Decided</th><th>Success rate</th></tr></thead>

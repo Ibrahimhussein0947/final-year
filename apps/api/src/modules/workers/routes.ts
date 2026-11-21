@@ -3,7 +3,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { audit } from '../../lib/audit';
-import { notFound } from '../../lib/errors';
+import { badRequest, notFound } from '../../lib/errors';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validateBody } from '../../middleware/common';
 import { deleteFileAsset, saveUpload, uploadSingle } from '../files/storage';
@@ -11,7 +11,11 @@ import {
   activitySchema, certificationSchema, educationSchema, experienceSchema, profileUpdateSchema, skillSchema,
 } from './schema';
 import * as svc from './service';
+import { checkCv, mismatchError, opportunitiesAfterAcceptance } from '../verification/service';
 import { listMyProfileViews, recordProfileView } from './views';
+import { myTrust } from './trust';
+import { buildCv } from './cv';
+import { addPortfolioItem, deletePortfolioItem, listPortfolio, portfolioSchema, updatePortfolioItem } from './portfolio';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -38,6 +42,41 @@ export function workersRouter() {
   const router = Router();
   const mine = [requireAuth, requireRole('WORKER'), loadWorker];
 
+  // Photos of finished work.
+  router.get('/me/portfolio', ...mine, async (req, res) => {
+    res.json({ items: await listPortfolio(req.workerId!) });
+  });
+  router.post('/me/portfolio', ...mine, uploadSingle, async (req, res) => {
+    const body = portfolioSchema.safeParse({ caption: req.body?.caption, skillId: req.body?.skillId || undefined });
+    if (!body.success) throw badRequest('Check the caption and skill', body.error.flatten().fieldErrors);
+    const item = await addPortfolioItem(req.user!.id, req.workerId!, req.file, body.data);
+    await audit(req, req.user!.id, 'worker.portfolio_added', 'PortfolioItem', item.id);
+    res.status(201).json({ item, items: await listPortfolio(req.workerId!) });
+  });
+  router.patch('/me/portfolio/:id', ...mine, validateBody(portfolioSchema), async (req, res) => {
+    res.json({ item: await updatePortfolioItem(req.workerId!, idParam(req), req.body) });
+  });
+  router.delete('/me/portfolio/:id', ...mine, async (req, res) => {
+    await deletePortfolioItem(req.workerId!, idParam(req));
+    res.json({ items: await listPortfolio(req.workerId!) });
+  });
+
+  // How much of the profile an administrator has checked, and what would raise it.
+  // CV builder: the worker's own profile as a PDF, in English, Amharic or Afaan Oromoo. Built on request, never stored.
+  router.get('/me/cv.pdf', ...mine, async (req, res) => {
+    const lang = z.enum(['en', 'am', 'om']).default('en').parse(req.query.lang ?? undefined);
+    const pdf = await buildCv(req.workerId!, lang);
+    await audit(req, req.user!.id, 'worker.cv_generated', 'WorkerProfile', req.workerId!, { lang });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="cv.pdf"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(pdf);
+  });
+
+  router.get('/me/trust', ...mine, async (req, res) => {
+    res.json({ trust: await myTrust(req.workerId!) });
+  });
   router.get('/me', ...mine, async (req, res) => {
     res.json({ profile: await svc.getOwnProfile(req.workerId!) });
   });
@@ -120,12 +159,29 @@ export function workersRouter() {
     };
     router.post(`/me/${path}`, ...mine, uploadSingle, async (req, res) => {
       const asset = await saveUpload(req.user!.id, kind, req.file);
+      // A CV is compared with the profile before it is accepted: someone else's CV, or one that contradicts the details, is declined.
+      let cvCheck: Awaited<ReturnType<typeof checkCv>> | null = null;
+      if (kind === 'CV') {
+        try {
+          cvCheck = await checkCv(req.workerId!, { buffer: req.file!.buffer, mime: asset.mime, fileId: asset.id });
+        } catch (err) {
+          await deleteFileAsset(asset.id);
+          throw err;
+        }
+        if (cvCheck.outcome === 'DECLINED') {
+          await deleteFileAsset(asset.id); // not kept, not attached
+          await audit(req, req.user!.id, 'worker.cv_declined', 'FileAsset', asset.id);
+          throw mismatchError(cvCheck, 'cv');
+        }
+      }
       const oldId = await currentFileId(req.workerId!);
       await prisma.workerProfile.update({ where: { id: req.workerId! }, data: { [field]: asset.id } });
       await deleteFileAsset(oldId);
       await svc.recomputeCompletion(req.workerId!);
       await audit(req, req.user!.id, `worker.${path}_uploaded`, 'FileAsset', asset.id);
-      res.status(201).json({ profile: await svc.getOwnProfile(req.workerId!) });
+      // An accepted CV means the profile is trusted enough to be matched: find the open jobs that fit what the worker wants.
+      const opportunities = cvCheck && cvCheck.outcome === 'ACCEPTED' ? await opportunitiesAfterAcceptance(req.workerId!, req.user!.id) : null;
+      res.status(201).json({ profile: await svc.getOwnProfile(req.workerId!), ...(cvCheck ? { cvCheck, opportunities } : {}) });
     });
     router.delete(`/me/${path}`, ...mine, async (req, res) => {
       const oldId = await currentFileId(req.workerId!);

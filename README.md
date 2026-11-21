@@ -41,14 +41,23 @@ npm run admin:create -- 0911000000 "a-long-password" "Admin Name"
 ```
 Test database setup (once): `create database ethiotalent_test`, then run `prisma migrate deploy` and the seed with `DATABASE_URL` pointing at it. Tests refuse to run against a database whose name does not end in `_test`.
 
-Auth design: bcrypt, 15-minute JWT access token (kept in memory in the browser), rotating refresh token in an httpOnly SameSite cookie with reuse detection, CSRF header on cookie endpoints, rate limiting, role checks that read the role from the database. Phone/email codes are generated and checked for real, but **no SMS or email provider is connected**: in development the code is returned by the API (`EXPOSE_DEV_OTP=true`) and never in production. Password reset is not implemented yet.
+Auth design: bcrypt, 15-minute JWT access token (kept in memory in the browser), rotating refresh token in an httpOnly SameSite cookie with reuse detection, CSRF header on cookie endpoints, rate limiting, role checks that read the role from the database. Phone/email codes are generated and checked for real, but **SMS and email are optional and off until you set keys** (Africa's Talking or a generic gateway for SMS, Resend for email; see `apps/api/.env.example`). Without keys, messages are only logged: in development the code is returned by the API (`EXPOSE_DEV_OTP=true`) and never in production. Password reset is not implemented yet.
 
 ## Profiles and uploads (Phase 5)
 - Worker profile: `/profile` in the web app, API under `/api/v1/workers/me`. Skills, education and certifications are always stored as *self-reported*; only an administrator (Phase 12) can mark them verified. Completion % is a transparent checklist (see `apps/api/src/modules/workers/completion.ts`).
 - Privacy: employers get `GET /api/v1/workers/:id` with no phone/email, no CV, location only down to woreda and GPS rounded to about 1 km. Workers can hide their profile.
-- Uploads (photo, CV, verification documents): file type is detected from the file's first bytes (not its name), size-limited, saved under a random name in `apps/api/uploads/` (git-ignored, never served statically) and downloaded only through authorized routes with `nosniff` and a sandboxing CSP. There is **no antivirus scan** yet; the code has a clear place to add one.
+- Uploads (photo, CV, verification documents): file type is detected from the file's first bytes (not its name), size-limited, saved under a random name in `apps/api/uploads/` (git-ignored, never served statically) and downloaded only through authorized routes with `nosniff` and a sandboxing CSP. Antivirus scanning with ClamAV is optional (`CLAMAV_HOST`, see `apps/api/.env.example`); without it only the file type is checked.
 - Employer: `/organization` page; verification documents create a pending request. The Verified badge needs admin approval, which arrives in Phase 12.
 - Not built yet: CV parsing (Phase 10), employer access to CVs (after applications exist, Phase 7), profile-photo cropping.
+
+## Telegram alerts (optional)
+Workers can get short alerts in Telegram (new matching jobs, interviews, offers, application updates). Off until configured:
+1. Create a bot with @BotFather and note its token and username.
+2. In `apps/api/.env` set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` (any 16+ letters/digits you invent) and `PUBLIC_URL`.
+3. With the site reachable over https, run `npm run telegram:webhook -- https://your-public-site` once (inside `apps/api`).
+4. A worker presses **Connect Telegram** on the dashboard, then **Start** in Telegram. `/stop` turns alerts off.
+
+The account is linked by a one-time code (stored hashed, valid 15 minutes), never by guessing from a phone number. Alert text is generic and never contains text written by other users; at most 10 a day; a chat that blocks the bot is unlinked automatically. The Amharic and Afaan Oromoo bot replies are drafts needing native review. Not yet tried against the real Telegram service, only against test doubles.
 
 ## Jobs (Phase 6)
 - Employers: `/employer/jobs` (list, publish, close, mark filled, delete drafts) and a full job form with required/nice-to-have skills, salary, schedule, deadline, location. API: `/api/v1/jobs`.

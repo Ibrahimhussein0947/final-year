@@ -1,0 +1,58 @@
+{
+  "model": "intfloat/multilingual-e5-small",
+  "dim": 384,
+  "max_tokens": 512,
+  "languages": {
+    "English": {
+      "top1": 0.875,
+      "mrr": 0.938,
+      "auc": 0.936,
+      "mean_cos_same_occupation": 0.881,
+      "mean_cos_different": 0.812
+    },
+    "Amharic": {
+      "top1": 0.438,
+      "mrr": 0.545,
+      "auc": 0.718,
+      "mean_cos_same_occupation": 0.906,
+      "mean_cos_different": 0.879
+    },
+    "Afaan Oromo": {
+      "top1": 0.875,
+      "mrr": 0.914,
+      "auc": 0.802,
+      "mean_cos_same_occupation": 0.931,
+      "mean_cos_different": 0.877
+    }
+  },
+  "cross_lingual": {
+    "English -> Amharic": {
+      "top1": 0.688,
+      "mrr": 0.823,
+      "auc": 0.898,
+      "mean_cos_same_occupation": 0.838,
+      "mean_cos_different": 0.802
+    },
+    "English -> Afaan Oromo": {
+      "top1": 0.375,
+      "mrr": 0.536,
+      "auc": 0.731,
+      "mean_cos_same_occupation": 0.818,
+      "mean_cos_different": 0.799
+    }
+  },
+  "calibration": {
+    "related_pairs": {
+      "n": 10,
+      "min": 0.84,
+      "median": 0.913,
+      "p10": 0.844
+    },
+    "unrelated_pairs": {
+      "n": 50,
+      "max": 0.871,
+      "median": 0.821,
+      "p90": 0.844
+    }
+  }
+}

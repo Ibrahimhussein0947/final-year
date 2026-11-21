@@ -25,6 +25,7 @@ def _load_dotenv() -> None:
 class Settings:
     model_name: str
     service_token: str
+    text_prefix: str = ""
     max_texts: int = 64
     max_text_chars: int = 2000
     cache_size: int = 5000
@@ -38,4 +39,5 @@ def load_settings() -> Settings:
     return Settings(
         model_name=os.environ.get("AI_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"),
         service_token=token,
+        text_prefix=os.environ.get("AI_TEXT_PREFIX", ""),
     )

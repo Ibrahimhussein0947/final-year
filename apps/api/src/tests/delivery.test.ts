@@ -129,7 +129,7 @@ describe('notification settings', () => {
 
   it('starts with job alerts on, SMS off, and tells the truth about the SMS provider', async () => {
     const w = await signUp('WORKER');
-    expect((await get(w)).body).toEqual({ notifyJobMatches: true, notifySms: false, phoneVerified: false, smsProviderConfigured: false, autoApply: false, autoApplyMinScore: 80 });
+    expect((await get(w)).body).toEqual({ notifyJobMatches: true, notifySms: false, phoneVerified: false, smsProviderConfigured: false, telegramConfigured: false, telegramLinked: false, notifyTelegram: false, autoApply: false, autoApplyMinScore: 80 });
     expect((await request(app).get('/api/v1/notifications/settings')).status).toBe(401);
   });
 

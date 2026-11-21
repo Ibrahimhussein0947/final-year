@@ -16,6 +16,7 @@ import { workersRouter } from './modules/workers/routes';
 import { employersRouter } from './modules/employers/routes';
 import { filesRouter } from './modules/files/routes';
 import { jobsRouter } from './modules/jobs/routes';
+import { marketplaceRouter } from './modules/marketplace/routes';
 import { interviewsRouter } from './modules/applications/interviews';
 import { trainingAdminRouter, trainingRouter } from './modules/training/routes';
 import { savedSearchesRouter } from './modules/jobs/savedSearches';
@@ -24,8 +25,15 @@ import { matchingRouter } from './modules/matching/routes';
 import { analysisRouter } from './modules/analysis/routes';
 import { messagingRouter } from './modules/messaging/routes';
 import { trustRouter } from './modules/trust/routes';
+import { documentsRouter } from './modules/documents/routes';
+import { reviewsRouter } from './modules/reviews/routes';
+import { offersRouter } from './modules/offers/routes';
+import { hiringRouter } from './modules/hiring/routes';
+import { skillTestsAdminRouter, skillTestsRouter } from './modules/skilltests/routes';
+import { verificationRouter } from './modules/verification/routes';
 import { adminRouter } from './modules/admin/routes';
 import { notificationsRouter } from './modules/notifications/routes';
+import { telegramWebhookRouter } from './modules/notifications/telegram';
 
 export function createApp(opts: { authRateLimitMax?: number } = {}) {
   const app = express();
@@ -60,15 +68,24 @@ export function createApp(opts: { authRateLimitMax?: number } = {}) {
   app.use('/api/v1/interviews', interviewsRouter());
   app.use('/api/v1/saved-searches', savedSearchesRouter());
   app.use('/api/v1/jobs', jobsRouter());
+  app.use('/api/v1/services', marketplaceRouter());
   app.use('/api/v1', applicationsRouter());
   app.use('/api/v1', matchingRouter());
   app.use('/api/v1', analysisRouter());
   app.use('/api/v1', messagingRouter());
   app.use('/api/v1', trustRouter());
+  app.use('/api/v1', documentsRouter());
+  app.use('/api/v1', reviewsRouter());
+  app.use('/api/v1', offersRouter());
+  app.use('/api/v1', hiringRouter());
+  app.use('/api/v1', skillTestsRouter());
+  app.use('/api/v1/admin/skill-tests', skillTestsAdminRouter());
+  app.use('/api/v1', verificationRouter());
   app.use('/api/v1/admin/training', trainingAdminRouter());
   app.use('/api/v1/training', trainingRouter());
   app.use('/api/v1/admin', adminRouter());
   app.use('/api/v1/notifications', notificationsRouter());
+  app.use('/api/v1/telegram', telegramWebhookRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);

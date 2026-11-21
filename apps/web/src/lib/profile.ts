@@ -28,11 +28,11 @@ export interface WorkerProfile {
   photoUrl: string | null;
   cvUrl: string | null;
   locationPath: { id: string; level: string; name: string }[];
-  skills: { skillId: string; name: string; proficiency: number; years: number | null; source: 'SELF_REPORTED' | 'VERIFIED' }[];
+  skills: { skillId: string; name: string; proficiency: number; years: number | null; source: 'SELF_REPORTED' | 'VERIFIED'; tested?: { score: number | null; at: string } | null }[];
   education: { id: string; level: string; field: string | null; institution: string | null; department: string | null; gpa: number | null; gpaScale: number | null; year: number | null; source: string; documentUrl: string | null }[];
   certifications: { id: string; name: string; issuer: string | null; year: number | null; source: string; documentUrl: string | null }[];
   activities: Activity[];
-  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null }[];
+  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null; source: 'SELF_REPORTED' | 'VERIFIED' }[];
   completion: { pct: number; items: { key: string; label: string; points: number; done: boolean }[] };
 }
 
@@ -45,7 +45,10 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   INTERNSHIP: 'Internship', VOLUNTEER: 'Voluntary service', TRAINING: 'Training course', APPRENTICESHIP: 'Apprenticeship (learned a trade)', REFERENCE: 'Reference (someone who can vouch for you)',
 };
 
-export interface Option { id: string; nameEn: string }
+export interface Option { id: string; nameEn: string; nameAm?: string | null; nameOm?: string | null }
+
+/** A place's name in the reader's language, falling back to English when no label has been added yet. */
+export const placeLabel = (l: Option, locale: string) => (locale === 'am' ? l.nameAm : locale === 'om' ? l.nameOm : null) || l.nameEn;
 
 export const useCategories = () =>
   useQuery({ queryKey: ['categories'], staleTime: 300_000, queryFn: async () => (await api<{ items: Option[] }>('/categories')).items });

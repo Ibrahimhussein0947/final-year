@@ -3,10 +3,12 @@ import { BadgeCheck, Clock, MapPin, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/primitives';
 import { EmployerKindBadge } from '@/components/OrgTypeFields';
 import type { JobListItem } from '@/lib/jobs';
-import { deadlineText, formatPlace, formatSalary, MODE_LABEL, timeAgo, TYPE_LABEL } from '@/lib/format';
+import type { Fit } from '@/lib/workerHelpers';
+import { FitLine } from '@/components/JobInsights';
+import { deadlineText, formatPlace, formatSalary, MODE_LABEL, OPEN_TO_LABEL, SENIORITY_LABEL, timeAgo, TYPE_LABEL } from '@/lib/format';
 
-export function JobCard({ job }: { job: JobListItem }) {
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency);
+export function JobCard({ job, fit }: { job: JobListItem; fit?: Fit }) {
+  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.payBasis);
   const deadline = deadlineText(job.deadline);
   return (
     <Link
@@ -41,9 +43,12 @@ export function JobCard({ job }: { job: JobListItem }) {
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Badge tone="accent">{TYPE_LABEL[job.employmentType]}</Badge>
         <Badge>{MODE_LABEL[job.workMode]}</Badge>
+        {job.seniority && <Badge>{SENIORITY_LABEL[job.seniority]}</Badge>}
+        {job.openTo?.slice(0, 2).map((g) => <Badge key={g} tone="success">{OPEN_TO_LABEL[g]}</Badge>)}
         <Badge>{job.category.name}</Badge>
         {job.skills.slice(0, 3).map((s) => <Badge key={s} tone="info">{s}</Badge>)}
       </div>
+      <FitLine fit={fit} />
     </Link>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/cn';
 import { CATEGORIES } from '@/lib/taxonomy';
+import { CategoryIcon } from '@/components/CategoryIcon';
 
 const shortName = (name: string) => name.split(/ and |, /)[0];
 
@@ -28,7 +29,7 @@ export function CategoryTiles({ value, onChange }: { value: string | null; onCha
                   on ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface hover:bg-surface-2',
                 )}
               >
-                <c.icon className="h-7 w-7" aria-hidden />
+                <CategoryIcon slug={c.slug} fallback={c.icon} />
                 <span>{shortName(c.name)}</span>
               </button>
             </li>

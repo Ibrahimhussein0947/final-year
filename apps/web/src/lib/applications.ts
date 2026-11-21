@@ -31,6 +31,10 @@ export interface MyApplication {
   qualified: boolean;
   autoApplied: boolean;
   notSelectedReasons: string[];
+  /** What the person can do to be a stronger candidate next time. */
+  notSelectedTips: { key: string; text: string; link: string }[];
+  canReview: boolean;
+  review: { rating: number } | null;
 }
 
 export interface SavedJobItem {
@@ -59,17 +63,18 @@ export interface JobApplicants {
 }
 
 export interface PublicProfile {
-  id: string; fullName: string; phoneVerified: boolean; contact: { phone: string } | null;
+  id: string; fullName: string; trust?: import('@/lib/trust').Trust; phoneVerified: boolean; contact: { phone: string } | null;
   headline: string | null; bio: string | null; occupation: string | null; category: { id: string; name: string } | null;
   yearsExperience: number; expectedSalaryMin: number | null; expectedSalaryMax: number | null;
   preferredTypes: string[]; preferredWorkModes: string[]; availability: string; availableFrom: string | null;
   willingToRelocate: boolean; maxTravelKm: number | null; languages: string[]; portfolioUrls: string[]; photoUrl: string | null;
   locationPath: { id: string; level: string; name: string }[];
-  skills: { skillId: string; name: string; proficiency: number; years: number | null; source: 'SELF_REPORTED' | 'VERIFIED' }[];
+  skills: { skillId: string; name: string; proficiency: number; years: number | null; source: 'SELF_REPORTED' | 'VERIFIED'; tested?: { score: number | null; at: string } | null }[];
   education: { id: string; level: string; field: string | null; institution: string | null; department: string | null; gpa: number | null; gpaScale: number | null; year: number | null; source: string; hasDocument: boolean; documentUrl: string | null }[];
   certifications: { id: string; name: string; issuer: string | null; year: number | null; source: string; hasDocument: boolean; documentUrl: string | null }[];
   activities: { id: string; kind: string; title: string; organization: string | null; startDate: string | null; endDate: string | null; hours: number | null; description: string | null; source: string; hasDocument: boolean; documentUrl: string | null }[];
-  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null }[];
+  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null; source?: string; documentUrl?: string | null }[];
+  portfolio?: { id: string; url: string; caption: string | null; skillId: string | null; skill: string | null; createdAt: string }[];
   /** Answers to sector questions (licence, shifts, tools...), with verified marks. */
   sectorAnswers?: { criterionId: string; labelEn: string; category: string | null; text: string; verified: boolean }[];
 }
@@ -117,11 +122,21 @@ export function notificationLink(n: AppNotification, role: string | undefined): 
   const p = n.payload as { jobId?: string; conversationId?: string };
   switch (n.type) {
     case 'message.new': return p.conversationId ? `/messages/${p.conversationId}` : '/messages';
+    case 'service.inquiry': return '/service-requests';
+    case 'service.inquiry_accepted':
+    case 'service.inquiry_declined': return '/service-requests';
+    case 'service.removed': return '/my-services';
     case 'job.reviewed': return '/employer/jobs';
     case 'verification.reviewed': return role === 'EMPLOYER' ? '/organization' : '/profile';
     case 'job.matches': return p.jobId ? `/employer/jobs/${p.jobId}/recommended` : '/employer/jobs';
     case 'application.auto': return '/applications';
     case 'interview.reminder': return '/interviews';
+    case 'offer.made':
+    case 'offer.withdrawn':
+    case 'offer.started':
+    case 'offer.reminder': return role === 'EMPLOYER' ? (p.jobId ? `/employer/jobs/${p.jobId}/applications` : '/employer/jobs') : '/applications';
+    case 'offer.responded':
+    case 'offer.expired': return p.jobId ? `/employer/jobs/${p.jobId}/applications` : '/employer/jobs';
     case 'job.invitation':
     case 'search.match':
     case 'job.recommended': return p.jobId ? `/jobs/${p.jobId}` : '/jobs';
@@ -132,7 +147,7 @@ export function notificationLink(n: AppNotification, role: string | undefined): 
 }
 
 export function notificationText(n: AppNotification): string {
-  const p = n.payload as { jobTitle?: string; status?: AppStatus; scheduledAt?: string; fromName?: string; count?: number; score?: number; decision?: string; kind?: string; note?: string; rescheduled?: boolean; window?: string; organizationName?: string; searchName?: string; matching?: number; strong?: number; reasons?: string[]; otherMatches?: number };
+  const p = n.payload as { jobTitle?: string; status?: AppStatus; scheduledAt?: string; fromName?: string; count?: number; score?: number; decision?: string; kind?: string; note?: string; rescheduled?: boolean; window?: string; organizationName?: string; searchName?: string; matching?: number; strong?: number; reasons?: string[]; otherMatches?: number; candidateName?: string; topJob?: string; planName?: string; approved?: boolean; response?: 'CONFIRMED' | 'DECLINED'; accepted?: boolean; startDate?: string; respondBy?: string; wasAccepted?: boolean; audience?: string; by?: string };
   const job = p.jobTitle ? `"${p.jobTitle}"` : 'a job';
   switch (n.type) {
     case 'job.reviewed': return `Your job ${job} was ${(p.decision ?? 'reviewed').toLowerCase()} by a moderator${p.note ? `: ${p.note}` : ''}`;
@@ -140,6 +155,10 @@ export function notificationText(n: AppNotification): string {
     case 'message.new': return `${p.count && p.count > 1 ? `${p.count} new messages` : 'New message'} from ${p.fromName ?? 'someone'}`;
     case 'search.match': return `A new job matches your saved search${p.searchName ? ` "${p.searchName}"` : ''}: ${job}${p.organizationName ? ` at ${p.organizationName}` : ''}.`;
     case 'job.invitation': return `${p.organizationName ?? 'An employer'} invited you to apply for ${job}`;
+    case 'service.inquiry': return `Someone asked about your service${(n.payload as { serviceTitle?: string }).serviceTitle ? ` "${(n.payload as { serviceTitle?: string }).serviceTitle}"` : ''}. Open your requests to answer.`;
+    case 'service.inquiry_accepted': return `A provider accepted your request${(n.payload as { serviceTitle?: string }).serviceTitle ? ` for "${(n.payload as { serviceTitle?: string }).serviceTitle}"` : ''}. You can now chat and see their phone number.`;
+    case 'service.inquiry_declined': return `A provider could not take your request${(n.payload as { serviceTitle?: string }).serviceTitle ? ` for "${(n.payload as { serviceTitle?: string }).serviceTitle}"` : ''}. You can ask another provider.`;
+    case 'service.removed': return `Your service listing${(n.payload as { serviceTitle?: string }).serviceTitle ? ` "${(n.payload as { serviceTitle?: string }).serviceTitle}"` : ''} was removed by a moderator${(n.payload as { note?: string }).note ? `: ${(n.payload as { note?: string }).note}` : ''}`;
     case 'job.recommended': return `Congratulations! Your qualifications match the requirements of ${p.organizationName ?? 'an employer'} for the ${job} position.${p.score ? ` Your matching score is ${p.score}%.` : ''} Open it to review and apply.`;
     case 'application.auto': return `Your qualifications match the requirements of ${p.organizationName ?? 'an employer'} for the ${job} position.${p.score ? ` Your matching score is ${p.score}%.` : ''} Because automatic applying is on, your application has been forwarded to the employer.`;
     case 'job.matches': return `${p.matching ?? 0} ${p.matching === 1 ? 'candidate matches' : 'candidates match'} the requirements of ${job}${p.strong ? ` (${p.strong} strongly)` : ''}. Open the list to review them.`;
@@ -151,6 +170,15 @@ export function notificationText(n: AppNotification): string {
       }
       return `Your application for ${job} is now ${p.status ? STATUS_META[p.status].label.toLowerCase() : 'updated'}`;
     case 'interview.scheduled': return `Interview ${p.rescheduled ? 'moved' : 'scheduled'} for ${job}${p.scheduledAt ? ` on ${new Date(p.scheduledAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}`;
+    case 'interview.responded': return `${p.candidateName ?? 'A candidate'} ${p.response === 'CONFIRMED' ? 'confirmed' : "can't attend"} the interview for ${job}${p.note ? `: "${p.note}"` : ''}`;
+    case 'plan.request_decided': return `Your request for the ${p.planName ?? 'new'} plan was ${p.approved ? 'approved. Your plan has been changed' : 'declined'}${p.note ? `: ${p.note}` : '.'}`;
+    case 'cv.accepted': return `Your CV was accepted. ${p.count ?? 0} open ${p.count === 1 ? 'job fits' : 'jobs fit'} what you want${p.topJob ? `, for example ${p.topJob}` : ''}. Open Recommended jobs to see them.`;
+    case 'offer.made': return `${p.organizationName ?? 'An employer'} sent you a job offer for ${job}${p.startDate ? `, starting ${p.startDate}` : ''}. Open it to read the terms and answer${p.respondBy ? ` by ${p.respondBy}` : ''}.`;
+    case 'offer.responded': return `${p.candidateName ?? 'A candidate'} ${p.accepted ? 'accepted' : 'declined'} your offer for ${job}${p.accepted && p.startDate ? `. They start on ${p.startDate}` : ''}.`;
+    case 'offer.withdrawn': return `${p.organizationName ?? 'The employer'} took back the ${p.wasAccepted ? 'accepted ' : ''}offer for ${job}.`;
+    case 'offer.expired': return `The offer for ${job} ran out without an answer${p.candidateName ? ` from ${p.candidateName}` : ''}. You can send it again.`;
+    case 'offer.started': return `${p.by === 'worker' ? (p.candidateName ?? 'The candidate') : (p.organizationName ?? 'The employer')} confirmed that work on ${job} has started.`;
+    case 'offer.reminder': return p.kind === 'answer' ? `Your offer for ${job} runs out on ${p.respondBy ?? 'soon'}. Open it to answer.` : p.audience === 'employer' ? `${job} starts on ${p.startDate ?? 'soon'}. Your new hire is expected.` : `Your new job (${job}) starts on ${p.startDate ?? 'soon'}. Good luck!`;
     case 'interview.cancelled': return `An interview for ${job} was cancelled`;
     case 'interview.reminder': {
       const at = p.scheduledAt ? new Date(p.scheduledAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';

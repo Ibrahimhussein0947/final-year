@@ -1,3 +1,5 @@
+import { trustOf } from './trust';
+import { listPortfolio } from './portfolio';
 import { workerCriteriaForEmployer } from '../criteria/service';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -53,6 +55,8 @@ const skillOut = (s: {
   proficiency: number;
   years: number | null;
   source: 'SELF_REPORTED' | 'VERIFIED';
+  testedScore: number | null;
+  testedAt: Date | null;
   skill: { nameEn: string; categoryId: string };
 }) => ({
   skillId: s.skillId,
@@ -61,6 +65,8 @@ const skillOut = (s: {
   proficiency: s.proficiency,
   years: s.years,
   source: s.source, // SELF_REPORTED or VERIFIED: the UI must show the difference
+  // Passed the skill test: shows what they could answer on the day. Different from VERIFIED, and not used in matching.
+  tested: s.testedAt ? { score: s.testedScore, at: s.testedAt } : null,
 });
 
 /** The owner's own view: includes exact GPS, completion checklist and CV link. */
@@ -100,6 +106,8 @@ export async function getPublicProfile(
     id: p.id,
     fullName: p.user.fullName,
     phoneVerified: !!p.user.phoneVerifiedAt,
+    trust: await trustOf(p.id),
+    portfolio: await listPortfolio(p.id),
     // Only revealed by the caller once the worker has applied and been shortlisted (see applications/transitions.ts).
     contact: opts.showPhone ? { phone: p.user.phone } : null,
     headline: p.headline,
@@ -127,7 +135,7 @@ export async function getPublicProfile(
     education: p.education.map(({ id, level, field, institution, department, gpa, gpaScale, year, source, evidenceFileId }) => ({ id, level, field, institution, department, gpa, gpaScale, year, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     certifications: p.certifications.map(({ id, name, issuer, year, source, evidenceFileId }) => ({ id, name, issuer, year, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     activities: p.activities.map(({ id, kind, title, organization, startDate, endDate, hours, description, source, evidenceFileId }) => ({ id, kind, title, organization, startDate, endDate, hours, description, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
-    experiences: p.experiences.map(({ id, title, employer, startDate, endDate, description }) => ({ id, title, employer, startDate, endDate, description })),
+    experiences: p.experiences.map(({ id, title, employer, startDate, endDate, description, source, evidenceFileId }) => ({ id, title, employer, startDate, endDate, description, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     // Answers to the sector questions, with verified marks (self-reported otherwise).
     sectorAnswers: await workerCriteriaForEmployer(p.id),
   };
@@ -194,6 +202,14 @@ export async function createChild(kind: Child, workerId: string, data: Record<st
 
 export async function updateChild(kind: Child, workerId: string, id: string, data: Record<string, unknown>) {
   // workerId in the filter enforces ownership: someone else's row simply matches nothing.
+  if (kind === 'workExperience') {
+    // A verified job that is then edited is no longer what the administrator looked at.
+    const before = await prisma.workExperience.findFirst({ where: { id, workerId }, select: { source: true, title: true, employer: true, startDate: true, endDate: true } });
+    const same = before && data.title === before.title && (data.employer ?? null) === before.employer
+      && (data.startDate as Date | undefined)?.getTime() === before.startDate.getTime()
+      && ((data.endDate as Date | null | undefined)?.getTime() ?? null) === (before.endDate?.getTime() ?? null);
+    if (before && before.source === 'VERIFIED' && !same) data = { ...data, source: 'SELF_REPORTED', evidenceFileId: null };
+  }
   const { count } = await delegate(kind).updateMany({ where: { id, workerId }, data });
   if (!count) throw notFound();
 }

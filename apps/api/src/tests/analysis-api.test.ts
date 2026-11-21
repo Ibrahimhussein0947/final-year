@@ -24,7 +24,7 @@ async function signUp(role: 'WORKER' | 'EMPLOYER') {
   const p = `09${String(randomInt(0, 100_000_000)).padStart(8, '0')}`.slice(0, 10);
   phones.push(`+251${p.slice(1)}`);
   const res = await request(app).post('/api/v1/auth/register').send({
-    fullName: `Test ${role}`, phone: p, password: 'Passw0rdTest', role, region: 'Oromia', language: 'en',
+    fullName: role === 'WORKER' ? 'Abebe Kebede' : `Test ${role}`, phone: p, password: 'Passw0rdTest', role, region: 'Oromia', language: 'en',
     ...(role === 'EMPLOYER' ? { organizationName: `TEST_ORG Analysis ${tag()}`, organizationType: 'SME' } : {}),
   });
   expect(res.status).toBe(201);
@@ -221,7 +221,7 @@ describe('CV analysis API', () => {
 });
 
 describe('OCR for photos and scans of a CV', () => {
-  const LINES = ['Skills', 'Engine Repair, Brake Systems, Welding', 'Work Experience', 'Senior Mechanic, Adama Auto Garage', 'January 2018 - Present'];
+  const LINES = ['Abebe Kebede', 'Skills', 'Engine Repair, Brake Systems, Welding', 'Work Experience', 'Senior Mechanic, Adama Auto Garage', 'January 2018 - Present'];
 
   /** Draw the lines as black text on white, like a photographed or scanned page. */
   function pageImage(type: 'image/png' | 'image/jpeg') {
@@ -264,7 +264,7 @@ describe('OCR for photos and scans of a CV', () => {
 
   it('does not use OCR for a normal text PDF', async () => {
     const w = await signUp('WORKER');
-    await send(w.token, makePdf(['Skills', 'Engine Repair, Brake Systems, Welding', 'Work Experience', 'Senior Mechanic, Adama Auto Garage', 'January 2018 - Present']), 'cv.pdf');
+    await send(w.token, makePdf(['Abebe Kebede', 'Skills', 'Engine Repair, Brake Systems, Welding', 'Work Experience', 'Senior Mechanic, Adama Auto Garage', 'January 2018 - Present']), 'cv.pdf');
     const res = await analyze(w.token);
     expect(res.status).toBe(200);
     expect(res.body.ocr.used).toBe(false);

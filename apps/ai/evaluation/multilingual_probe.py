@@ -78,7 +78,7 @@ def main() -> None:
     from app.embeddings import CachedEmbedder, SentenceTransformerBackend
 
     cfg = load_settings()
-    backend = SentenceTransformerBackend(cfg.model_name)
+    backend = SentenceTransformerBackend(cfg.model_name, cfg.text_prefix)
     embed = CachedEmbedder(backend).embed
     report: dict = {"model": backend.name, "dim": backend.dim, "max_tokens": backend.max_tokens, "languages": {}, "cross_lingual": {}}
 
@@ -116,7 +116,10 @@ def main() -> None:
 
     out = ROOT / "evaluation" / "reports"
     out.mkdir(parents=True, exist_ok=True)
-    (out / "multilingual_probe.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    slug = backend.name.split("/")[-1]
+    (out / f"multilingual_probe_{slug}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    if backend.name == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2":
+        (out / "multilingual_probe.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(f"model: {backend.name}  dim={backend.dim}  max_tokens={backend.max_tokens}\n")
     print(f"{'set':<24}{'top1':>6}{'MRR':>7}{'AUC':>7}{'same':>8}{'diff':>8}")

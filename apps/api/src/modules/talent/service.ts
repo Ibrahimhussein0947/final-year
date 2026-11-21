@@ -12,6 +12,7 @@ import { detectDiscrimination, discriminationMessage } from '../criteria/discrim
 import { normalizeRequirement, optionsOf } from '../criteria/validate';
 import { ownedJob } from '../jobs/service';
 import { notify } from '../notifications/service';
+import { trustFor } from '../workers/trust';
 
 // ───────── search ─────────
 
@@ -40,6 +41,8 @@ export const searchSchema = z
     availableWithin: z.enum(['immediate', 'two_weeks', 'month']).optional(),
     minEducation: z.enum(['PRIMARY', 'SECONDARY', 'VOCATIONAL_CERTIFICATE', 'DIPLOMA', 'BACHELOR', 'MASTER', 'DOCTORATE']).optional(),
     verified: z.enum(['true', 'false']).optional(),
+    /** Only people whose documents an administrator approved up to this trust level (1 = ID verified ... 4 = highly trusted). */
+    minTrust: z.coerce.number().int().min(1).max(4).optional(),
     /** JSON array of {criterionId, value}: keep only workers whose own answer satisfies each one. */
     criteria: z.string().max(2000).optional(),
     /** One of the employer's own jobs: rank by match to it and leave out people who do not meet a must-have. */
@@ -134,6 +137,11 @@ export async function searchWorkers(orgId: string, input: SearchInput) {
     });
   }
 
+  if (input.minTrust) {
+    const t = await trustFor(rows.map((r) => r.id));
+    rows = rows.filter((r) => (t.get(r.id)?.level ?? 0) >= input.minTrust!);
+  }
+
   let matches = new Map<string, ReturnType<typeof publicMatch>>();
   if (job) {
     const scored = await scoreWorkersForJob(job.id, rows.map((r) => r.id));
@@ -151,6 +159,7 @@ export async function searchWorkers(orgId: string, input: SearchInput) {
         prisma.application.findMany({ where: { jobId: job.id, workerId: { in: pageRows.map((r) => r.id) }, status: { not: 'WITHDRAWN' } }, select: { workerId: true } }),
       ])
     : [[], []];
+  const trust = await trustFor(pageRows.map((r) => r.id));
   const inviteBy = new Map(invites.map((i) => [i.workerId, i.status]));
   const appliedSet = new Set(applied.map((a) => a.workerId));
 
@@ -166,6 +175,7 @@ export async function searchWorkers(orgId: string, input: SearchInput) {
         workerId: w.id, name: w.user.fullName, headline: w.headline, occupation: w.occupation, yearsExperience: w.yearsExperience,
         photoUrl: w.photoFileId ? `/api/v1/files/${w.photoFileId}` : null, location: names.slice(0, 3).join(', ') || null,
         availability: w.availability, completionPct: w.completionPct,
+        trust: trust.get(w.id) ?? null,
         skills: w.skills.slice(0, 5).map((s) => s.skill.nameEn),
         verified: {
           skills: w.skills.filter((s) => s.source === 'VERIFIED').length,

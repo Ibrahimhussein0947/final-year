@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CalendarDays, ChevronLeft, ChevronRight, Download, Phone, UserRound, Video } from 'lucide-react';
 import { Alert, Badge, Card, EmptyState, Skeleton } from '@/components/ui/primitives';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useAuth } from '@/app/auth';
 import { cn } from '@/lib/cn';
-import { dayKey, downloadIcs, joinLink, MODE_LABEL, useMyInterviews, type CalendarInterview } from '@/lib/interviews';
+import { dayKey, downloadIcs, joinLink, MODE_LABEL, respondToInterview, useMyInterviews, type CalendarInterview } from '@/lib/interviews';
 import { ApiError } from '@/lib/api';
 
 /** "Join video call" when it is time, otherwise when it opens. The link only comes from the server inside the window. */
@@ -32,6 +33,59 @@ function JoinCall({ i }: { i: CalendarInterview }) {
   return (
     <div className="mt-2">
       <Button size="sm" variant="accent" loading={busy} onClick={join}><Video className="h-4 w-4" aria-hidden /> Join video call</Button>
+      {error && <p role="alert" className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/** The candidate's answer. A worker can confirm or say they cannot come; an employer sees the answer and any reason. */
+function Answer({ i, isEmployer }: { i: CalendarInterview; isEmployer: boolean }) {
+  const qc = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (i.status !== 'SCHEDULED') return null;
+  const upcoming = new Date(i.scheduledAt) > new Date();
+  async function send(response: 'CONFIRMED' | 'DECLINED') {
+    setBusy(true);
+    setError(null);
+    try {
+      await respondToInterview(i.id, response, note.trim());
+      setAsking(false);
+      setNote('');
+      await qc.invalidateQueries({ queryKey: ['my-interviews'] });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not send your answer. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  const badge = i.response === 'CONFIRMED' ? <Badge tone="success">{isEmployer ? 'Candidate confirmed' : 'You confirmed'}</Badge>
+    : i.response === 'DECLINED' ? <Badge tone="danger">{isEmployer ? "Candidate can't attend" : "You can't attend"}</Badge>
+    : <Badge>{isEmployer ? 'Waiting for the candidate' : 'Please answer'}</Badge>;
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2">{badge}</div>
+      {isEmployer && i.response === 'DECLINED' && (
+        <p className="mt-1 text-xs text-muted">{i.declineNote ? `Reason: ${i.declineNote}. ` : ''}Open the candidate to move the interview to another time.</p>
+      )}
+      {!isEmployer && upcoming && !asking && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {i.response !== 'CONFIRMED' && <Button size="sm" variant="accent" loading={busy} onClick={() => send('CONFIRMED')}>I can come</Button>}
+          {i.response !== 'DECLINED' && <Button size="sm" variant="outline" onClick={() => setAsking(true)}>I can't come</Button>}
+        </div>
+      )}
+      {!isEmployer && asking && (
+        <div className="mt-2 space-y-2">
+          <label className="block text-xs text-muted" htmlFor={`note-${i.id}`}>Tell the employer why (optional)</label>
+          <input id={`note-${i.id}`} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+          <div className="flex gap-2">
+            <Button size="sm" variant="accent" loading={busy} onClick={() => send('DECLINED')}>Send</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
       {error && <p role="alert" className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
@@ -128,6 +182,7 @@ export default function InterviewsPage() {
                       <p className="flex items-center justify-between gap-2 font-semibold"><span>{time(i.scheduledAt)}–{time(i.endsAt)}</span>{i.status === 'COMPLETED' && <Badge>Done</Badge>}</p>
                       <p><Link to={link(i)} className="font-medium hover:text-accent">{i.with}</Link> · {i.job.title}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted"><ModeIcon mode={i.mode} />{MODE_LABEL[i.mode]}{i.locationOrLink && !i.video ? ` · ${i.locationOrLink}` : ''}{i.video?.platformRoom ? ' · private room' : ''}</p>
+                      <Answer i={i} isEmployer={isEmployer} />
                       <JoinCall i={i} />
                     </li>
                   ))}
@@ -154,7 +209,7 @@ export default function InterviewsPage() {
               <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => downloadIcs().catch(() => setError('Could not download the calendar file.'))}>
                 <Download className="h-4 w-4" aria-hidden /> Add to my phone or Google calendar (.ics)
               </Button>
-              <p className="mt-2 text-xs text-muted">You are reminded in the app about a day before and about an hour before each interview. Times are shown in your device's time zone.</p>
+              <p className="mt-2 text-xs text-muted">You are reminded in the app about a day before and about an hour before each interview, and workers can confirm or decline each time. Times are shown in your device's time zone.</p>
             </Card>
           </div>
         </div>

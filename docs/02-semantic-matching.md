@@ -18,6 +18,21 @@
 
 Environment note: the install needed several attempts because DNS lookups for `files.pythonhosted.org` failed intermittently on this network; pip's cache made retries cheap. Python 3.12 is used (3.14 cannot run PyTorch yet). Nothing was faked: results carry `rules-1.0` whenever semantic information is absent and `hybrid-1.0` only when real vectors were used.
 
+## Other models tried (November 2026): none fixes Amharic
+
+The same 16-occupation probe (`evaluation/multilingual_probe.py`, run per model with `AI_MODEL` and, for E5, `AI_TEXT_PREFIX="query: "`; reports in `apps/ai/evaluation/reports/`) on three models. AUC is the chance that two wordings of the same occupation score higher than two different occupations (1.0 perfect, 0.5 chance); top-1 is how often the right partner ranks first.
+
+| Model (dim) | English AUC / top-1 | Amharic AUC / top-1 | Afaan Oromoo AUC / top-1 | Note |
+|---|---|---|---|---|
+| paraphrase-multilingual-MiniLM-L12 (384), **current** | 0.983 / 0.875 | 0.77 / 0.25 | 0.76 / 0.375 | |
+| multilingual-e5-small (384) | 0.936 / 0.875 | 0.72 / 0.44 | 0.80 / 0.875 | all cosines squeezed into 0.80 to 0.93 (same 0.88-0.93, different 0.81-0.88), so the current calibration bounds (0.25 to 0.70) would have to be redone |
+| paraphrase-multilingual-mpnet-base-v2 (768) | 0.998 / 1.0 | 0.68 / 0.19 | 0.77 / 0.56 | larger, slower, needs re-embedding everything |
+| LaBSE (768) | not measured | not measured | not measured | the model download failed twice (network), so it is untested |
+
+**Reading it honestly:** no tested model separates Amharic occupations reliably (AUC 0.68 to 0.77 for all three, top-1 at most 0.44). Afaan Oromoo moves around (E5 top-1 0.875, MPNet 0.56, current 0.375) but with 16 phrases written without a native speaker a difference of a few phrases is noise, and E5 pays for it with worse English and a squeezed score range. **So the model was not changed**: there is no measured gain worth a re-embedding, a recalibration and a slower service. `AI_TEXT_PREFIX` support was added so a model that needs a prefix can be evaluated or adopted without code changes.
+
+**What was changed instead:** text that is clearly Afaan Oromoo is now kept out of the embedding like Amharic (`isLikelyAfaanOromoo`, a check for very common Afaan Oromoo words: at least 6 words, 3 hits and 12 percent of the words), so unreliable similarities cannot raise an Afaan Oromoo worker's or job's score; they are matched by the rules alone. Limits: it is a word list, not a language model; a short title alone is not flagged; Afaan Oromoo that is mostly English skill names can slip through; an English text that happens to contain several of the words could be flagged (it then only loses the optional meaning boost).
+
 ## How it works
 
 ```

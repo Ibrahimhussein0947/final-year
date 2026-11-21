@@ -44,9 +44,16 @@ export interface AdminUser {
 export interface VerificationItem {
   id: string; kind: string; status: string; createdAt: string; note: string | null; target: string | null; evidenceUrl: string | null;
   requester: { id: string; name: string; role: string }; organization: { name: string; type: string; verificationStatus: string } | null;
+  /** What the system could match in an uploaded document. A hint for the reviewer, never a verdict. */
+  check: AutoCheck | null;
+}
+export interface AutoCheck {
+  docType: string; outcome: 'CONSISTENT' | 'PARTIAL' | 'MISMATCH' | 'UNREADABLE'; reason: string | null; ocrConfidence: number | null; textChars: number;
+  fields: { field: string; expected: string; status: 'FOUND' | 'CLOSE' | 'NOT_FOUND'; required: boolean; note?: string; read?: string }[];
+  flags: { code: string; level: 'info' | 'warn'; message: string }[];
 }
 export interface ReportItem {
-  id: string; targetType: 'JOB' | 'USER'; targetId: string; reason: string; details: string | null; status: string; createdAt: string; reporter: string;
+  id: string; targetType: 'JOB' | 'USER' | 'SERVICE'; targetId: string; reason: string; details: string | null; status: string; createdAt: string; reporter: string;
   target: { label: string; status?: string } | null; openReportsOnTarget: number; resolutionNote: string | null;
 }
 export interface PendingJob { id: string; title: string; snippet: string; category: string; organization: string; organizationVerified: boolean; reason: string; createdAt: string }

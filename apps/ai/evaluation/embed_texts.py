@@ -19,7 +19,7 @@ from app.embeddings import CachedEmbedder, SentenceTransformerBackend  # noqa: E
 def main(src: str, dst: str) -> None:
     texts: dict[str, str] = json.load(open(src, encoding="utf-8"))
     cfg = load_settings()
-    backend = SentenceTransformerBackend(cfg.model_name)
+    backend = SentenceTransformerBackend(cfg.model_name, cfg.text_prefix)
     embed = CachedEmbedder(backend).embed
     ids = list(texts)
     vecs = embed([texts[i] for i in ids])

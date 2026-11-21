@@ -2,6 +2,7 @@ import {
   EDUCATION_RANK,
   type ComponentOutcome, type JobFeatures, type RelationMap, type WorkerFeatures,
 } from './types';
+import { typeAccepted } from '../jobs/classification';
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const DAY = 86_400_000;
@@ -266,7 +267,7 @@ export function preferencesComponent(job: JobFeatures, worker: WorkerFeatures): 
     else parts.push({ score: clamp01(1 - (wMin - jMax) / wMin), note: 'offered salary is below what the worker expects' });
   }
   if (worker.preferredTypes.length > 0) {
-    const ok = worker.preferredTypes.includes(job.employmentType);
+    const ok = typeAccepted(worker.preferredTypes, job.employmentType);
     parts.push({ score: ok ? 1 : 0.3, note: ok ? 'matches their preferred job type' : 'different from their preferred job type' });
   }
   if (worker.preferredWorkModes.length > 0) {

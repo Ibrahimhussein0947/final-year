@@ -1,3 +1,4 @@
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { Link } from 'react-router-dom';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useI18n } from '@/i18n';
@@ -16,9 +17,7 @@ export default function Categories() {
               to={`/jobs?category=${c.slug}`}
               className="group flex items-start gap-4 rounded-2xl border border-border bg-surface p-5 shadow-card transition hover:-translate-y-0.5 hover:border-accent"
             >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                <c.icon className="h-6 w-6" aria-hidden />
-              </span>
+              <CategoryIcon slug={c.slug} fallback={c.icon} />
               <span>
                 <span className="block font-semibold group-hover:text-accent">{c.name}</span>
                 <span className="mt-1 block text-sm text-muted">{c.examples}</span>

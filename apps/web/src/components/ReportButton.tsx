@@ -10,7 +10,7 @@ const REASONS: [string, string][] = [
 ];
 
 /** Lets a signed-in person report a job (or a user) to the moderators. */
-export function ReportButton({ targetType, targetId, label = 'Report this job' }: { targetType: 'JOB' | 'USER'; targetId: string; label?: string }) {
+export function ReportButton({ targetType, targetId, label = 'Report this job' }: { targetType: 'JOB' | 'USER' | 'SERVICE'; targetId: string; label?: string }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('SCAM');
   const [details, setDetails] = useState('');

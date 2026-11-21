@@ -1,21 +1,28 @@
-# Continuous integration. Runs on every push and pull request.
-# This workflow has NOT been executed on GitHub yet (it was written locally); the commands in it were each run locally,
-# but the first real run may need small fixes. The `ai` job is non-blocking until it has passed once.
+# Continuous integration. Runs on every push to main, every pull request, and on demand.
+#
+# STATUS: this workflow has NOT been executed on GitHub yet. Every command in it was run locally against a fresh database
+# (see docs/06-testing-and-evaluation.md), but the first real run may still need small fixes. The `ai` job and the dependency
+# audit are non-blocking; the `ci-ok` job at the end is the single check to require in branch protection.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   api:
-    name: API (typecheck, tests, build, evaluation)
+    name: API (migrations, typecheck, tests, build, evaluation)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -27,23 +34,43 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ethiotalent -d ethiotalent_test"
           --health-interval 5s --health-timeout 3s --health-retries 12
+    # Developers keep these in the git-ignored apps/api/.env.test; CI has no such file, so they are set here.
+    # Several tests rely on them: DOCUMENTS_REQUIRED=false (only the document tests switch it on) and a video meeting address.
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://ethiotalent:ci_only_password@localhost:5433/ethiotalent_test?schema=public
+      SHADOW_DATABASE_URL: postgresql://ethiotalent:ci_only_password@localhost:5433/ethiotalent_shadow?schema=public
       JWT_ACCESS_SECRET: ci_only_secret_that_is_at_least_32_characters_long
       BCRYPT_ROUNDS: "4"
       EXPOSE_DEV_OTP: "true"
       UPLOAD_DIR: ./uploads-test
+      VIDEO_BASE_URL: https://video.test.example
+      DOCUMENTS_REQUIRED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: Database extensions, migrations and seed
+      # The OCR tests download the English language model on first use; keep it between runs.
+      - uses: actions/cache@v4
+        with:
+          path: apps/api/ocr-data
+          key: tesseract-eng-v1
+      - name: Database extensions
+        run: |
+          export PGPASSWORD=ci_only_password
+          psql -h localhost -p 5433 -U ethiotalent -d ethiotalent_test -f infra/db-init/01-extensions.sql
+          psql -h localhost -p 5433 -U ethiotalent -d ethiotalent_test -c 'CREATE DATABASE ethiotalent_shadow'
+      - name: Prisma client and migration check
         working-directory: apps/api
         run: |
-          PGPASSWORD=ci_only_password psql -h localhost -p 5433 -U ethiotalent -d ethiotalent_test -f ../../infra/db-init/01-extensions.sql
           npx prisma generate
+          npx prisma validate
+          # Fails when prisma/schema.prisma changed without a matching migration file (a hand-written or forgotten migration).
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_DATABASE_URL" --exit-code
+      - name: Apply migrations and seed
+        working-directory: apps/api
+        run: |
           npx prisma migrate deploy
           npx tsx prisma/seed/index.ts
       - name: Typecheck
@@ -55,13 +82,21 @@ jobs:
       - name: Tests (unit, integration, security, end-to-end, performance)
         working-directory: apps/api
         run: npx vitest run
-      - name: Ranking evaluation (must run; results are in the log)
+      - name: Ranking evaluation (must run; results are in the log and the artifact)
         working-directory: apps/api
         run: npm run eval
+      - name: Keep the evaluation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results
+          path: docs/evaluation-results.md
+          if-no-files-found: ignore
 
   web:
     name: Web (typecheck, tests, build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,15 +112,40 @@ jobs:
         working-directory: apps/web
 
   docker:
-    name: Docker images build
+    name: Docker images build and smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [api, web]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: API image
         uses: docker/build-push-action@v6
-        with: { context: ., file: infra/docker/api.Dockerfile, target: runtime, push: false, cache-from: type=gha, cache-to: "type=gha,mode=max" }
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: ethiotalent-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The production image installs only production dependencies, so anything the code needs at run time that lives in a
+      # devDependency, or in a package whose files are found by path (the PDF fonts), would only break here, not in the tests.
+      - name: Smoke test the API image (app loads, CV PDF with Amharic text renders)
+        run: |
+          docker run --rm \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=postgresql://u:p@localhost:5432/x \
+            -e JWT_ACCESS_SECRET=ci_only_secret_that_is_at_least_32_characters_long \
+            ethiotalent-api:ci node -e "
+              const { createApp } = require('./dist/app.js');
+              createApp();
+              const { renderCv } = require('./dist/modules/workers/cv.js');
+              renderCv({ lang: 'am', name: 'አበበ ከበደ', headline: 'Mechanic', contact: [], summary: 'ስድስት ዓመት የሥራ ልምድ', experiences: [], education: [], skills: [], certifications: [], languages: [] })
+                .then((pdf) => { if (pdf.subarray(0, 5).toString() !== '%PDF-') throw new Error('not a PDF'); console.log('app and CV renderer ok,', pdf.length, 'bytes'); process.exit(0); })
+                .catch((e) => { console.error(e); process.exit(1); });
+            "
       - name: Migration image
         uses: docker/build-push-action@v6
         with: { context: ., file: infra/docker/api.Dockerfile, target: tools, push: false, cache-from: type=gha }
@@ -96,6 +156,7 @@ jobs:
   audit:
     name: Dependency audit (production)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Known findings (zod, react-router) need major upgrades; see docs/06-testing-and-evaluation.md.
     # Non-blocking so they stay visible without hiding other failures. Remove continue-on-error after upgrading.
     continue-on-error: true
@@ -108,6 +169,7 @@ jobs:
   ai:
     name: AI service tests (fake embedding backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Never run yet: non-blocking until it has passed once.
     continue-on-error: true
     defaults:
@@ -120,3 +182,14 @@ jobs:
       # Only the light dependencies: the tests use a fake backend, so PyTorch and the model are not needed.
       - run: pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" "pydantic>=2.7" numpy httpx "pytest>=8.0"
       - run: python -m pytest
+
+  # One check to require in branch protection: green only when every blocking job is green.
+  ci-ok:
+    name: CI passed
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [api, web, docker]
+    steps:
+      - run: |
+          echo "api: ${{ needs.api.result }}, web: ${{ needs.web.result }}, docker: ${{ needs.docker.result }}"
+          [ "${{ needs.api.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ] && [ "${{ needs.docker.result }}" = "success" ]

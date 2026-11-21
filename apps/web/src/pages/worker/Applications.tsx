@@ -10,6 +10,8 @@ import { api, ApiError } from '@/lib/api';
 import { STATUS_META, useMyApplications, useSavedJobs, type MyApplication } from '@/lib/applications';
 import { formatSalary, TYPE_LABEL } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { RateEmployer } from '@/components/JobInsights';
+import { WorkerOffers } from '@/components/OfferPanels';
 
 const MODE = { IN_PERSON: 'In person', PHONE: 'Phone call', VIDEO: 'Video call' } as const;
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
@@ -54,10 +56,19 @@ function ApplicationCard({ a, onError }: { a: MyApplication; onError: (m: string
                 <ul className="mt-1 list-disc pl-5">{a.notSelectedReasons.map((r) => <li key={r}>{r}</li>)}</ul>
               </>
             )}
+            {a.notSelectedTips.length > 0 && (
+              <>
+                <p className="mt-2 font-medium">What you can do to be stronger next time:</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">{a.notSelectedTips.map((t) => <li key={t.key}>{t.text} <Link to={t.link} className="text-accent hover:underline">Open</Link></li>)}</ul>
+              </>
+            )}
             <p className="mt-1 text-muted">This is an automatic summary of the match, not the employer's reasoning. Your profile stays available for other jobs.</p>
             <Link to="/recommended" className="mt-1 inline-block text-accent hover:underline">See other jobs that fit you</Link>
           </div>
         )}
+
+        {a.canReview && <RateEmployer applicationId={a.id} organization={a.job.organization} />}
+        {a.review && <p className="mt-3 text-sm text-muted">You rated this employer {a.review.rating} out of 5. Thank you.</p>}
 
         {upcoming.length > 0 && (
           <ul className="mt-3 space-y-2">
@@ -109,6 +120,7 @@ export function MyApplicationsPage() {
       <PageHeader title="My applications" subtitle="Track every job you applied for." />
       <PageBody narrow>
         {error && <div className="mb-4"><Alert tone="danger">{error}</Alert></div>}
+        <WorkerOffers />
         {q.isLoading && <div className="space-y-3" aria-busy="true"><Skeleton className="h-28" /><Skeleton className="h-28" /></div>}
         {q.isError && <Alert tone="danger">Could not load your applications.</Alert>}
         {q.data?.length === 0 && (

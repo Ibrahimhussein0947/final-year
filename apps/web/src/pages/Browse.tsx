@@ -10,16 +10,23 @@ import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useI18n } from '@/i18n';
 import { CATEGORIES, EMPLOYMENT_TYPES, REGIONS } from '@/lib/taxonomy';
 import { useJobSearch } from '@/lib/jobs';
+import { BENEFIT_LABEL, OPEN_TO_LABEL, PAY_BASIS_LABEL, SEGMENT_LABEL, SENIORITY_LABEL, WORKPLACE_LABEL } from '@/lib/format';
 import { CategoryTiles } from '@/components/CategoryTiles';
 import { SavedSearchesPanel } from '@/components/SavedSearchesPanel';
-import { useLocations } from '@/lib/profile';
+import { useLocations, useWorkerProfile } from '@/lib/profile';
+import { useJobFit } from '@/lib/workerHelpers';
+import { LocationLevel } from '@/pages/worker/sections';
 
 const TYPE_VALUE: Record<string, string> = {
   'Full-time': 'FULL_TIME', 'Part-time': 'PART_TIME', Temporary: 'TEMPORARY', Contract: 'CONTRACT',
   Freelance: 'FREELANCE', Internship: 'INTERNSHIP', Seasonal: 'SEASONAL', Daily: 'DAILY',
+  Permanent: 'PERMANENT', Casual: 'CASUAL', Apprenticeship: 'APPRENTICESHIP', Volunteer: 'VOLUNTEER', Gig: 'GIG', 'On-call': 'ON_CALL',
 };
 const PAGE_SIZE = 10;
-const FILTER_KEYS = ['region', 'locationId', 'category', 'type', 'mode', 'minSalary', 'hasSalary', 'flexible', 'maxEducation', 'maxExperience', 'startWithin', 'postedWithin', 'language', 'verifiedOnly', 'employerGroup'];
+const FILTER_KEYS = ['region', 'locationId', 'category', 'type', 'mode', 'minSalary', 'hasSalary', 'flexible', 'maxEducation', 'maxExperience', 'startWithin', 'postedWithin', 'language', 'verifiedOnly', 'employerGroup', 'segment', 'seniority', 'openTo', 'payBasis', 'workplace', 'benefit'];
+// Zone > woreda > kebele picks live in the URL so the selects survive a reload; the API only ever sees the deepest one as locationId.
+const PLACE_KEYS = ['zone', 'woreda', 'kebele'] as const;
+const PLACE_LABELS = ['Zone or city', 'Woreda (district)', 'Kebele'];
 const LANGUAGES = ['Amharic', 'Afaan Oromoo', 'English', 'Tigrinya', 'Somali', 'Arabic'];
 
 function Filters() {
@@ -31,7 +38,34 @@ function Filters() {
   const activeCount = FILTER_KEYS.filter((k) => params.get(k)).length;
   const regions = useLocations().data ?? [];
   const regionId = regions.find((r) => r.nameEn.toLowerCase() === (params.get('region') ?? '').toLowerCase())?.id;
-  const zones = useLocations(regionId).data ?? [];
+  const chain: string[] = [];
+  for (const k of PLACE_KEYS) { const v = params.get(k); if (!v) break; chain.push(v); }
+  // Choosing a level clears the ones below it, and locationId follows the deepest level chosen.
+  const setPlace = (level: number, id: string) => {
+    const next = new URLSearchParams(params);
+    PLACE_KEYS.forEach((k, i) => { if (i >= level) next.delete(k); });
+    if (id) next.set(PLACE_KEYS[level], id);
+    const deepest = id || (level > 0 ? chain[level - 1] : '');
+    if (deepest) next.set('locationId', deepest); else next.delete('locationId');
+    next.delete('page');
+    setParams(next, { replace: true });
+  };
+  // A signed-in worker can jump to jobs in their own area, taken from the place saved in their profile.
+  const { user } = useAuth();
+  const mine = useWorkerProfile({ enabled: user?.role === 'WORKER' });
+  const myPlace = mine.data?.locationPath ?? [];
+  const nearMe = () => {
+    const next = new URLSearchParams(params);
+    ['region', 'locationId', ...PLACE_KEYS].forEach((k) => next.delete(k));
+    const region = myPlace.find((l) => l.level === 'REGION');
+    if (region) next.set('region', region.name);
+    const deeper = myPlace.filter((l) => l.level !== 'REGION' && l.level !== 'KEBELE');
+    deeper.forEach((l, i) => { if (PLACE_KEYS[i]) next.set(PLACE_KEYS[i], l.id); });
+    const deepest = deeper[deeper.length - 1] ?? region;
+    if (deepest) next.set('locationId', deepest.id);
+    next.delete('page');
+    setParams(next, { replace: true });
+  };
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v);
@@ -46,14 +80,20 @@ function Filters() {
         <SlidersHorizontal className="h-4 w-4" aria-hidden /> {open ? 'Hide filters' : 'Filters'}{activeCount > 0 ? ` (${activeCount})` : ''}
       </Button>
       <div id="job-filters" className={open ? 'contents' : 'hidden sm:contents'}>
-      <SelectField label={t('common.region')} value={params.get('region') ?? ''} onChange={(e) => { const next = new URLSearchParams(params); next.delete('locationId'); next.delete('page'); if (e.target.value) next.set('region', e.target.value); else next.delete('region'); setParams(next, { replace: true }); }}>
+      {user?.role === 'WORKER' && myPlace.length > 0 && (
+        <div className="flex items-end"><Button type="button" variant="outline" onClick={nearMe}>Jobs near me ({myPlace.filter((l) => l.level !== 'KEBELE').map((l) => l.name).slice(-1)[0]})</Button></div>
+      )}
+      <SelectField label={t('common.region')} value={params.get('region') ?? ''} onChange={(e) => { const next = new URLSearchParams(params); next.delete('locationId'); PLACE_KEYS.forEach((k) => next.delete(k)); next.delete('page'); if (e.target.value) next.set('region', e.target.value); else next.delete('region'); setParams(next, { replace: true }); }}>
         <option value="">{t('common.all')}</option>
         {REGIONS.map((r) => <option key={r}>{r}</option>)}
       </SelectField>
-      <SelectField label="Zone or city" disabled={!regionId} value={params.get('locationId') ?? ''} onChange={(e) => set('locationId', e.target.value)}>
-        <option value="">{t('common.all')}</option>
-        {zones.map((z) => <option key={z.id} value={z.id}>{z.nameEn}</option>)}
-      </SelectField>
+      {regionId ? (
+        PLACE_KEYS.map((k, i) => (i === 0 || chain[i - 1]) && (
+          <LocationLevel key={k} label={PLACE_LABELS[i]} parentId={i === 0 ? regionId : chain[i - 1]} value={chain[i] ?? ''} onChange={(id) => setPlace(i, id)} />
+        ))
+      ) : (
+        <SelectField label={PLACE_LABELS[0]} disabled value=""><option value="">{t('common.all')}</option></SelectField>
+      )}
       <SelectField label={t('common.category')} value={params.get('category') ?? ''} onChange={(e) => set('category', e.target.value)}>
         <option value="">{t('common.all')}</option>
         {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
@@ -67,6 +107,30 @@ function Filters() {
         <option value="ON_SITE">On-site</option>
         <option value="REMOTE">Remote</option>
         <option value="HYBRID">Hybrid</option>
+      </SelectField>
+      <SelectField label="Part of the job market" value={params.get('segment') ?? ''} onChange={(e) => set('segment', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(SEGMENT_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </SelectField>
+      <SelectField label="Level of the position" value={params.get('seniority') ?? ''} onChange={(e) => set('seniority', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(SENIORITY_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </SelectField>
+      <SelectField label="Welcomes" value={params.get('openTo') ?? ''} onChange={(e) => set('openTo', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(OPEN_TO_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </SelectField>
+      <SelectField label="Where the work is done" value={params.get('workplace') ?? ''} onChange={(e) => set('workplace', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(WORKPLACE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </SelectField>
+      <SelectField label="How the pay is counted" value={params.get('payBasis') ?? ''} onChange={(e) => set('payBasis', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(PAY_BASIS_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+      </SelectField>
+      <SelectField label="Comes with" value={params.get('benefit') ?? ''} onChange={(e) => set('benefit', e.target.value)}>
+        <option value="">{t('common.all')}</option>
+        {Object.entries(BENEFIT_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
       </SelectField>
       <SelectField label="Kind of employer" value={params.get('employerGroup') ?? ''} onChange={(e) => set('employerGroup', e.target.value)}>
         <option value="">{t('common.all')}</option>
@@ -142,6 +206,9 @@ export function JobsPage() {
   api.set('page', String(page));
   api.set('pageSize', String(PAGE_SIZE));
   const q = useJobSearch(api.toString());
+  const { user } = useAuth();
+  // A signed-in worker sees how many of each job's requirements they already meet.
+  const fit = useJobFit((q.data?.items ?? []).map((j) => j.id), user?.role === 'WORKER');
 
   const totalPages = q.data ? Math.max(1, Math.ceil(q.data.total / q.data.pageSize)) : 1;
   const goto = (p: number) => {
@@ -150,7 +217,6 @@ export function JobsPage() {
     setParams(next);
   };
   const hasFilters = ['q', ...FILTER_KEYS].some((k) => params.get(k));
-  const { user } = useAuth();
   const current: Record<string, string> = {};
   for (const k of ['q', ...FILTER_KEYS]) {
     const v = params.get(k);
@@ -161,6 +227,18 @@ export function JobsPage() {
     <>
       <PageHeader title={t('jobs.title')} subtitle={t('jobs.subtitle')} />
       <PageBody>
+        <div role="group" aria-label="Part of the job market" className="mb-4 flex flex-wrap gap-2">
+          {[['', 'All jobs'], ...Object.entries(SEGMENT_LABEL)].map(([v, label]) => {
+            const active = (params.get('segment') ?? '') === v;
+            return (
+              <button key={v || 'all'} type="button" aria-pressed={active}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${active ? 'border-accent bg-accent text-white' : 'border-border hover:border-accent hover:text-accent'}`}
+                onClick={() => { const next = new URLSearchParams(params); if (v) next.set('segment', v); else next.delete('segment'); next.delete('page'); setParams(next, { replace: true }); }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <CategoryTiles value={params.get('category')} onChange={(slug) => { const next = new URLSearchParams(params); if (slug) next.set('category', slug); else next.delete('category'); next.delete('page'); setParams(next, { replace: true }); }} />
         <div className="mt-4"><Filters /></div>
         {user?.role === 'WORKER' && (
@@ -186,7 +264,7 @@ export function JobsPage() {
           {q.data && q.data.total > 0 && (
             <>
               <p className="mb-3 text-sm text-muted">{q.data.total} job{q.data.total === 1 ? '' : 's'} found</p>
-              <div className="grid gap-3">{q.data.items.map((j) => <JobCard key={j.id} job={j} />)}</div>
+              <div className="grid gap-3">{q.data.items.map((j) => <JobCard key={j.id} job={j} fit={fit.data?.[j.id]} />)}</div>
               {totalPages > 1 && (
                 <nav className="mt-6 flex items-center justify-center gap-3" aria-label="Pagination">
                   <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goto(page - 1)}><ChevronLeft className="h-4 w-4" aria-hidden />Previous</Button>

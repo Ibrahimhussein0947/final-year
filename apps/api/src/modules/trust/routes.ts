@@ -25,13 +25,17 @@ export function trustRouter() {
   router.post(
     '/reports',
     requireAuth,
-    validateBody(z.object({ targetType: z.enum(['JOB', 'USER']), targetId: z.string().uuid(), reason: z.enum(REASONS), details: z.string().trim().max(1000).optional() }).strict()),
+    validateBody(z.object({ targetType: z.enum(['JOB', 'USER', 'SERVICE']), targetId: z.string().uuid(), reason: z.enum(REASONS), details: z.string().trim().max(1000).optional() }).strict()),
     async (req, res) => {
-      const { targetType, targetId, reason, details } = req.body as { targetType: 'JOB' | 'USER'; targetId: string; reason: (typeof REASONS)[number]; details?: string };
+      const { targetType, targetId, reason, details } = req.body as { targetType: 'JOB' | 'USER' | 'SERVICE'; targetId: string; reason: (typeof REASONS)[number]; details?: string };
       const me = req.user!.id;
       if (targetType === 'USER') {
         if (targetId === me) throw badRequest('You cannot report yourself');
         if (!(await prisma.user.findUnique({ where: { id: targetId }, select: { id: true } }))) throw notFound('User not found');
+      } else if (targetType === 'SERVICE') {
+        const listing = await prisma.serviceListing.findFirst({ where: { id: targetId, status: { not: 'REMOVED' } }, select: { worker: { select: { userId: true } } } });
+        if (!listing) throw notFound('Service not found');
+        if (listing.worker.userId === me) throw badRequest('You cannot report your own listing');
       } else {
         const job = await prisma.job.findFirst({ where: { id: targetId, status: { not: 'REMOVED' } }, select: { postedById: true } });
         if (!job) throw notFound('Job not found');

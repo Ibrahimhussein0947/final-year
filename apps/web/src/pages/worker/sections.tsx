@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n';
+import { Link } from 'react-router-dom';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,19 +9,23 @@ import { Alert, Badge, Card, SelectField, TextAreaField, TextField } from '@/com
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import {
-  ACTIVITY_LABEL, useCategories, useLocations, useProfileAction, useProtectedImage, useSkillSearch,
+  ACTIVITY_LABEL, placeLabel, useCategories, useLocations, useProfileAction, useProtectedImage, useSkillSearch,
   type ActivityKind, type SaveState, type WorkerProfile,
 } from '@/lib/profile';
 import { cn } from '@/lib/cn';
 import { VerifyControl } from '@/pages/worker/VerifyControl';
+import { CvCheckPanel } from '@/components/CvCheckPanel';
+import { useCvUpload } from '@/lib/cvCheck';
 
-export function SectionCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export function SectionCard({ title, description, children, id }: { title: string; description?: string; children: ReactNode; id?: string }) {
   return (
-    <Card className="p-5 sm:p-6">
-      <h2 className="text-lg font-bold">{title}</h2>
-      {description && <p className="mt-1 text-sm text-muted">{description}</p>}
-      <div className="mt-5">{children}</div>
-    </Card>
+    <div id={id} className="scroll-mt-20">
+      <Card className="p-5 sm:p-6">
+        <h2 className="text-lg font-bold">{title}</h2>
+        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+        <div className="mt-5">{children}</div>
+      </Card>
+    </div>
   );
 }
 
@@ -130,11 +136,12 @@ export function LocationPicker({ profile }: { profile: WorkerProfile }) {
 
 export function LocationLevel({ label, parentId, value, onChange }: { label: string; parentId?: string; value: string; onChange: (id: string) => void }) {
   const q = useLocations(parentId);
+  const { locale } = useI18n();
   if (parentId && q.isSuccess && q.data.length === 0) return null;
   return (
     <SelectField label={label} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">–</option>
-      {q.data?.map((l) => <option key={l.id} value={l.id}>{l.nameEn}</option>)}
+      {q.data?.map((l) => <option key={l.id} value={l.id}>{placeLabel(l, locale)}</option>)}
     </SelectField>
   );
 }
@@ -144,6 +151,7 @@ export function LocationLevel({ label, parentId, value, onChange }: { label: str
 const TYPES: [string, string][] = [
   ['FULL_TIME', 'Full-time'], ['PART_TIME', 'Part-time'], ['TEMPORARY', 'Temporary'], ['CONTRACT', 'Contract'],
   ['FREELANCE', 'Freelance'], ['INTERNSHIP', 'Internship'], ['SEASONAL', 'Seasonal'], ['DAILY', 'Daily work'],
+  ['PERMANENT', 'Permanent'], ['CASUAL', 'Casual'], ['APPRENTICESHIP', 'Apprenticeship'], ['VOLUNTEER', 'Volunteer (unpaid)'], ['GIG', 'Gig (short task)'], ['ON_CALL', 'On-call'],
 ];
 const MODES: [string, string][] = [['ON_SITE', 'On-site'], ['REMOTE', 'Remote'], ['HYBRID', 'Hybrid']];
 const AVAIL: [string, string][] = [
@@ -293,10 +301,12 @@ export function SkillsSection({ profile }: { profile: WorkerProfile }) {
 
       <ul className="mt-5 divide-y divide-border">
         {profile.skills.length === 0 && <li className="py-3 text-sm text-muted">No skills yet. Search above to add your first one.</li>}
+        {profile.skills.length > 0 && <li className="py-3 text-sm"><Link to="/skill-tests" className="font-medium text-accent hover:underline">Take a skill test</Link> <span className="text-muted">to show employers what you know. A passed test adds a Tested mark.</span></li>}
         {profile.skills.map((s) => (
           <li key={s.skillId} className="flex flex-wrap items-center gap-3 py-3">
             <span className="min-w-40 flex-1 font-medium">{s.name}</span>
             <SourceBadge source={s.source} />
+            {s.tested && <Badge tone="info">Tested {s.tested.score}%</Badge>}
             {s.source !== 'VERIFIED' && <VerifyControl targetType="SKILL" targetId={s.skillId} />}
             <label className="flex items-center gap-2 text-sm">
               <span className="text-muted">Level</span>
@@ -358,7 +368,7 @@ export function ExperienceSection({ profile }: { profile: WorkerProfile }) {
       empty="No work history yet. Informal and daily work counts too."
       items={profile.experiences.map((e) => (
         <Row key={e.id} label={`Delete ${e.title}`} onDelete={() => del.mutate(e.id)}>
-          <p className="font-medium">{e.title}{e.employer ? ` · ${e.employer}` : ''}</p>
+          <p className="flex flex-wrap items-center gap-2 font-medium">{e.title}{e.employer ? ` · ${e.employer}` : ''} <SourceBadge source={e.source} /> {e.source !== 'VERIFIED' && <VerifyControl targetType="EXPERIENCE" targetId={e.id} />}</p>
           <p className="text-muted">{e.startDate.slice(0, 7)} to {e.endDate ? e.endDate.slice(0, 7) : 'present'}</p>
           {e.description && <p className="mt-1">{e.description}</p>}
         </Row>
@@ -530,6 +540,8 @@ export function FilesSection({ profile }: { profile: WorkerProfile }) {
     return api(`/workers/me/${a.kind}`, { method: 'POST', body });
   });
   const del = useProfileAction((kind: 'photo' | 'cv') => api(`/workers/me/${kind}`, { method: 'DELETE' }));
+  // A CV is compared with the profile when it is uploaded: it is accepted (and the jobs that fit are shown) or declined with the reasons.
+  const cvUp = useCvUpload();
   const [dlError, setDlError] = useState<string | null>(null);
 
   async function downloadCv() {
@@ -548,7 +560,7 @@ export function FilesSection({ profile }: { profile: WorkerProfile }) {
   }
 
   return (
-    <SectionCard title="Photo and CV" description="Photo: JPG or PNG up to 2 MB. CV: PDF up to 5 MB. Your CV is private and not shown to employers yet.">
+    <SectionCard id="photo-and-cv" title="Photo and CV" description="Photo: JPG or PNG up to 2 MB. CV: PDF up to 5 MB. Your CV is checked against your profile when you upload it, and is private until you apply.">
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="flex items-center gap-4">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-muted">
@@ -562,12 +574,14 @@ export function FilesSection({ profile }: { profile: WorkerProfile }) {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4 text-muted" aria-hidden /> {profile.cvUrl ? 'CV uploaded' : 'No CV uploaded'}</div>
           <div className="flex flex-wrap items-center gap-3">
-            <UploadButton label={profile.cvUrl ? 'Replace CV' : 'Upload CV (PDF or photo)'} accept="application/pdf,image/jpeg,image/png" busy={up.isPending} onFile={(file) => up.mutate({ kind: 'cv', file })} />
+            <UploadButton label={profile.cvUrl ? 'Replace CV' : 'Upload CV (PDF or photo)'} accept="application/pdf,image/jpeg,image/png" busy={cvUp.isPending} onFile={(file) => cvUp.mutate(file)} />
             {profile.cvUrl && <Button variant="ghost" size="sm" onClick={downloadCv}>Download</Button>}
             {profile.cvUrl && <button type="button" className="text-sm text-danger hover:underline" onClick={() => del.mutate('cv')}>Remove</button>}
           </div>
         </div>
       </div>
+      {cvUp.isPending && <p role="status" className="mt-3 text-sm text-muted">Reading your CV and comparing it with your profile. A photo can take up to a minute.</p>}
+      <CvCheckPanel opportunities={cvUp.data?.opportunities} error={cvUp.error} />
       <div className="mt-3 min-h-5">
         <SaveStatus state={up.state.status !== 'idle' ? up.state : del.state} />
         {dlError && <Alert tone="danger">{dlError}</Alert>}

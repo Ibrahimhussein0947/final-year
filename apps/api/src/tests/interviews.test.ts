@@ -191,12 +191,56 @@ describe('calendar listing and .ics', () => {
   });
 
   it('builds valid, escaped calendar text', () => {
-    const text = buildIcs([{ id: 'i1', applicationId: 'a', scheduledAt: new Date('2027-01-05T08:00:00Z'), endsAt: new Date('2027-01-05T09:00:00Z'), mode: 'VIDEO', video: null, locationOrLink: 'https://x.test/a,b', status: 'SCHEDULED', job: { id: 'j', title: 'Driver; night' }, with: 'ABC' }], 'WORKER', new Date('2027-01-01T00:00:00Z'));
+    const text = buildIcs([{ id: 'i1', applicationId: 'a', scheduledAt: new Date('2027-01-05T08:00:00Z'), endsAt: new Date('2027-01-05T09:00:00Z'), mode: 'VIDEO', video: null, locationOrLink: 'https://x.test/a,b', status: 'SCHEDULED', response: 'PENDING', declineNote: null, job: { id: 'j', title: 'Driver; night' }, with: 'ABC' }], 'WORKER', new Date('2027-01-01T00:00:00Z'));
     expect(text).toContain('DTSTART:20270105T080000Z');
     expect(text).toContain('DTEND:20270105T090000Z');
     expect(text).toContain('SUMMARY:Interview: Driver\\; night (ABC)');
     expect(text).toContain('LOCATION:https://x.test/a\\,b');
     expect(text.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
     expect(text.endsWith('END:VCALENDAR\r\n')).toBe(true);
+  });
+});
+
+describe('candidate answers a proposed time', () => {
+  it('confirms or declines, tells the employer, and starts over when the time is moved', async () => {
+    const e = await signUp('EMPLOYER');
+    const w = await signUp('WORKER');
+    const appId = await shortlisted(e, w, await liveJob(e));
+    expect((await book(e, appId, inHours(72))).status).toBe(201);
+    const ivId = (await prisma.interview.findFirstOrThrow({ where: { applicationId: appId } })).id;
+    const answer = (u: User, body: object) => request(app).post(`/api/v1/interviews/${ivId}/respond`).set(auth(u.token)).send(body);
+    const listed = async (u: User) => (await request(app).get('/api/v1/interviews/mine').set(auth(u.token))).body.items[0];
+
+    expect((await listed(w)).response).toBe('PENDING');
+    expect((await answer(w, { response: 'CONFIRMED' })).status).toBe(200);
+    expect((await listed(e)).response).toBe('CONFIRMED');
+    expect((await prisma.notification.findMany({ where: { userId: e.id, type: 'interview.responded' } })).length).toBe(1);
+
+    const declined = await answer(w, { response: 'DECLINED', note: 'I work that day' });
+    expect(declined.status).toBe(200);
+    const asEmployer = await listed(e);
+    expect(asEmployer).toMatchObject({ response: 'DECLINED', declineNote: 'I work that day' });
+    expect((await listed(w)).declineNote).toBeNull(); // the note is for the employer's eyes; the worker list does not echo it
+
+    // moving the time asks the candidate again and clears the old answer
+    const moved = await request(app).patch(`/api/v1/applications/${appId}/interviews/${ivId}`).set(auth(e.token)).send({ scheduledAt: inHours(96).toISOString(), mode: 'IN_PERSON', locationOrLink: 'Adama office' });
+    expect(moved.status).toBe(200);
+    expect(await listed(w)).toMatchObject({ response: 'PENDING' });
+    expect((await listed(e)).declineNote).toBeNull();
+  });
+
+  it('only the invited worker can answer, with a valid answer, before the time has passed', async () => {
+    const e = await signUp('EMPLOYER');
+    const w = await signUp('WORKER');
+    const other = await signUp('WORKER');
+    const appId = await shortlisted(e, w, await liveJob(e));
+    expect((await book(e, appId, inHours(72))).status).toBe(201);
+    const ivId = (await prisma.interview.findFirstOrThrow({ where: { applicationId: appId } })).id;
+    const url = `/api/v1/interviews/${ivId}/respond`;
+    expect((await request(app).post(url).set(auth(e.token)).send({ response: 'CONFIRMED' })).status).toBe(403); // employers cannot answer for the candidate
+    expect((await request(app).post(url).set(auth(other.token)).send({ response: 'CONFIRMED' })).status).toBe(404);
+    expect((await request(app).post(url).set(auth(w.token)).send({ response: 'MAYBE' })).status).toBe(400);
+    await prisma.interview.update({ where: { id: ivId }, data: { scheduledAt: inHours(-2) } });
+    expect((await request(app).post(url).set(auth(w.token)).send({ response: 'CONFIRMED' })).status).toBe(409);
   });
 });

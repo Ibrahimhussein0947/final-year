@@ -10,6 +10,8 @@ import {
   ActivitiesSection, BasicsForm, CertificationsSection, EducationSection, ExperienceSection, FilesSection,
   GpsCard, LocationPicker, PreferencesForm, SkillsSection,
 } from '@/pages/worker/sections';
+import { DocumentsSummary } from '@/components/DocumentsSummary';
+import { PortfolioSection } from '@/pages/worker/Portfolio';
 
 export default function WorkerProfilePage() {
   const q = useWorkerProfile();
@@ -62,8 +64,10 @@ export default function WorkerProfilePage() {
             <SkillsSection profile={q.data} />
             <SectorQuestions profile={q.data} />
             <ExperienceSection profile={q.data} />
+            <PortfolioSection profile={q.data} />
             <EducationSection profile={q.data} />
             <CertificationsSection profile={q.data} />
+            <DocumentsSummary />
             <ActivitiesSection profile={q.data} />
             <PreferencesForm profile={q.data} />
             <GpsCard profile={q.data} />

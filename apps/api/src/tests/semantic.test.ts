@@ -7,7 +7,7 @@ import { createApp } from '../app';
 import { createHttpAiClient, setAiClient, type AiClient } from '../integrations/aiClient';
 import { prisma } from '../lib/prisma';
 import { cosine, semanticScore } from '../modules/matching/components';
-import { isMostlyEthiopic, jobText, refreshJobEmbedding, refreshWorkerEmbedding, workerText } from '../modules/matching/embeddings';
+import { isLikelyAfaanOromoo, isMostlyEthiopic, isUnsupportedForEmbedding, jobText, refreshJobEmbedding, refreshWorkerEmbedding, workerText } from '../modules/matching/embeddings';
 import { matchPair } from '../modules/matching/scorer';
 import { DEFAULT_WEIGHTS, type JobFeatures, type RelationMap, type WorkerFeatures } from '../modules/matching/types';
 
@@ -266,6 +266,13 @@ describe('keeping embeddings up to date', () => {
 
   it('does not embed Amharic text (the model was measured as unreliable for it) but still embeds English', async () => {
     expect(isMostlyEthiopic('የተሽከርካሪ ጥገና ባለሙያ', null, 'ከአስር ዓመት በላይ ልምድ አለኝ')).toBe(true);
+    // Afaan Oromoo is in Latin letters: recognised from very common words, so it is also kept out of the embedding
+    const oromoo = "Ani hojjetaa konkolaataa dha. Waggaa kudhan hojii suphaa makiinaa keessa hojjedha, fi barnoota koo xumureera.";
+    expect(isLikelyAfaanOromoo('Konkolaachisaa', null, oromoo)).toBe(true);
+    expect(isUnsupportedForEmbedding(null, null, oromoo)).toBe(true);
+    expect(isLikelyAfaanOromoo('Vehicle repair specialist', null, 'Ten years fixing trucks and buses in a busy garage, with engine and brake work.')).toBe(false);
+    expect(isLikelyAfaanOromoo('Hojjetaa dibaa manaa')).toBe(false); // a short title alone is not enough to say
+    expect(isLikelyAfaanOromoo('Engine repair', null, 'I work in Adama and also speak Afaan Oromoo and Amharic with customers.')).toBe(false);
     expect(isMostlyEthiopic('Vehicle repair specialist', null, 'Ten years')).toBe(false);
     expect(isMostlyEthiopic('Mechanic with ten years of experience in Adama garages ባለሙያ')).toBe(false); // a little Amharic inside English text is fine
     expect(isMostlyEthiopic(null, '', '   ')).toBe(false);

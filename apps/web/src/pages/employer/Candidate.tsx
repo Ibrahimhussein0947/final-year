@@ -11,8 +11,12 @@ import { StatusActions } from '@/pages/employer/Applicants';
 import { api, ApiError, fetchBlobUrl } from '@/lib/api';
 import { STATUS_META, useCandidate, type CandidateView, type PublicProfile } from '@/lib/applications';
 import { useProtectedImage } from '@/lib/profile';
+import { TrustBadge } from '@/components/TrustBadge';
+import { PortfolioGallery } from '@/pages/worker/Portfolio';
+import { EmployerOffer } from '@/components/OfferPanels';
 import { useInterviewConfig } from '@/lib/interviews';
 import { MatchPanel } from '@/components/MatchPanel';
+import { describeRecorded, STEP_FORM_LABEL, useHiringSteps, type StepKind } from '@/lib/selectionSteps';
 import { EDU_LABEL, formatSalary, TYPE_LABEL } from '@/lib/format';
 
 const MODE = { IN_PERSON: 'In person', PHONE: 'Phone call', VIDEO: 'Video call' } as const;
@@ -41,7 +45,7 @@ export function ProfileSummary({ p }: { p: PublicProfile }) {
           {photo ? <img src={photo} alt="" className="h-full w-full object-cover" /> : p.fullName.slice(0, 1)}
         </div>
         <div>
-          <h2 className="text-xl font-bold">{p.fullName}</h2>
+          <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold">{p.fullName} <TrustBadge trust={p.trust} /></h2>
           <p className="text-muted">{p.headline ?? p.occupation ?? 'No headline'}</p>
           <p className="text-sm text-muted">{p.locationPath.map((l) => l.name).join(', ') || 'Location not set'} · {p.yearsExperience} yr experience</p>
         </div>
@@ -60,7 +64,7 @@ export function ProfileSummary({ p }: { p: PublicProfile }) {
         <h3 className="mb-2 font-semibold">Skills</h3>
         <ul className="flex flex-wrap gap-2">
           {p.skills.length === 0 && <li className="text-sm text-muted">No skills listed</li>}
-          {p.skills.map((s) => <li key={s.skillId} className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm">{s.name} <span className="text-muted">L{s.proficiency}</span><Source s={s.source} /></li>)}
+          {p.skills.map((s) => <li key={s.skillId} className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm">{s.name} <span className="text-muted">L{s.proficiency}</span><Source s={s.source} />{s.tested && <Badge tone="info">Tested {s.tested.score}%</Badge>}</li>)}
         </ul>
       </section>
       {p.sectorAnswers && p.sectorAnswers.length > 0 && (
@@ -71,9 +75,10 @@ export function ProfileSummary({ p }: { p: PublicProfile }) {
           <p className="mt-1 text-xs text-muted">Questions the worker did not answer are not shown and are not held against them.</p>
         </section>
       )}
+      <PortfolioGallery items={p.portfolio ?? []} />
       {p.experiences.length > 0 && (
         <section><h3 className="mb-2 font-semibold">Work history</h3>
-          <ul className="space-y-2 text-sm">{p.experiences.map((e) => <li key={e.id}><span className="font-medium">{e.title}</span>{e.employer ? ` · ${e.employer}` : ''}<span className="text-muted"> ({e.startDate.slice(0, 4)} to {e.endDate ? e.endDate.slice(0, 4) : 'present'})</span></li>)}</ul></section>
+          <ul className="space-y-2 text-sm">{p.experiences.map((e) => <li key={e.id}><span className="font-medium">{e.title}</span>{e.employer ? ` · ${e.employer}` : ''}<span className="text-muted"> ({e.startDate.slice(0, 4)} to {e.endDate ? e.endDate.slice(0, 4) : 'present'})</span> {e.source === 'VERIFIED' && <Source s="VERIFIED" />}{e.documentUrl && <button type="button" className="ml-2 text-accent hover:underline" onClick={() => void openDocument(e.documentUrl!)}>Experience letter</button>}</li>)}</ul></section>
       )}
       {(p.education.length > 0 || p.certifications.length > 0) && (
         <section><h3 className="mb-2 font-semibold">Education and certificates</h3>
@@ -170,6 +175,92 @@ function InterviewForm({ view, onError }: { view: CandidateView; onError: (m: st
   );
 }
 
+const SCORE_FIELDS = ['skills', 'experience', 'communication', 'suitability'] as const;
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+/** Builds the request body for one recruitment step from the plain form values. */
+function stepBody(kind: StepKind, f: Record<string, string>) {
+  const note = f.note?.trim() || null;
+  switch (kind) {
+    case 'WRITTEN_EXAM': return { kind, score: Number(f.score), examDate: f.date, note };
+    case 'PRACTICAL_TEST': return { kind, score: Number(f.score), testDate: f.date, task: f.task, note };
+    case 'SCORE_SHEET': return { kind, panelist: f.person, scores: Object.fromEntries(SCORE_FIELDS.map((k) => [k, Number(f[k] || 3)])), note };
+    case 'REFERENCE_CHECKED': return { kind, referee: f.person, outcome: f.outcome || 'POSITIVE', note };
+    case 'GUARANTOR_RECORDED': return { kind, guarantor: f.person, relationship: f.relationship, idSeen: f.idSeen === 'yes' };
+  }
+}
+
+function SelectionSteps({ applicationId, onError }: { applicationId: string; onError: (m: string | null) => void }) {
+  const qc = useQueryClient();
+  const q = useHiringSteps(applicationId);
+  const [kind, setKind] = useState<StepKind>('WRITTEN_EXAM');
+  const [f, setF] = useState<Record<string, string>>({ date: todayIso() });
+  const set = (k: string) => (e: { target: { value: string; type?: string; checked?: boolean } }) => setF((p) => ({ ...p, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 'yes' : '') : e.target.value }));
+  const done = () => Promise.all([qc.invalidateQueries({ queryKey: ['hiring-steps', applicationId] }), qc.invalidateQueries({ queryKey: ['candidate'] })]);
+  const fail = (e: unknown) => onError(e instanceof ApiError ? (Object.values(e.details ?? {}).flat()[0] as string | undefined) ?? e.message : 'Could not reach the server');
+  const add = useMutation({
+    mutationFn: () => api(`/applications/${applicationId}/steps`, { method: 'POST', body: stepBody(kind, f) }),
+    onSuccess: () => { onError(null); setF({ date: todayIso() }); void done(); },
+    onError: fail,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api(`/applications/${applicationId}/steps/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { void done(); },
+    onError: fail,
+  });
+  if (!q.data) return null;
+  const v = q.data;
+  const needsScore = kind === 'WRITTEN_EXAM' || kind === 'PRACTICAL_TEST';
+
+  return (
+    <Card className="p-5">
+      <h3 className="font-semibold">Selection steps</h3>
+      <p className="mt-1 text-xs text-muted">Record the checks you did before deciding. The system records and checks that required steps were done; it cannot judge how well they were done.</p>
+      {v.steps.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-sm">
+          {v.steps.map((s) => (
+            <li key={s.key} className="flex flex-wrap items-center gap-2">
+              {s.done ? <Check className="h-4 w-4 text-success" aria-hidden /> : <X className="h-4 w-4 text-muted" aria-hidden />}
+              <span className="font-medium">{s.label}</span>
+              {s.required ? <Badge tone="warning">Required</Badge> : <Badge>Suggested</Badge>}
+              <span className="text-muted">{s.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.recorded.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+          {v.recorded.map((r) => (
+            <li key={r.id} className="flex items-start justify-between gap-2">
+              <span><strong>{STEP_FORM_LABEL[r.kind]}</strong>: {describeRecorded(r)}</span>
+              {v.open && <button type="button" aria-label={`Delete ${STEP_FORM_LABEL[r.kind]}`} className="shrink-0 rounded p-1 hover:bg-surface-2" onClick={() => { if (window.confirm('Delete this record?')) remove.mutate(r.id); }}><X className="h-4 w-4" aria-hidden /></button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.open ? (
+        <form className="mt-4 grid gap-3 sm:grid-cols-2" noValidate onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+          <SelectField label="Add a step" value={kind} onChange={(e) => { setKind(e.target.value as StepKind); setF({ date: todayIso() }); }}>
+            {(Object.keys(STEP_FORM_LABEL) as StepKind[]).map((k) => <option key={k} value={k}>{STEP_FORM_LABEL[k]}</option>)}
+          </SelectField>
+          {needsScore && <TextField label="Score (out of 100)" type="number" min={0} max={100} value={f.score ?? ''} onChange={set('score')} />}
+          {needsScore && <TextField label="Date" type="date" max={todayIso()} value={f.date ?? ''} onChange={set('date')} />}
+          {kind === 'PRACTICAL_TEST' && <div className="sm:col-span-2"><TextField label="Task given" placeholder="For example: lay a 2 m wall, change a tyre" value={f.task ?? ''} onChange={set('task')} /></div>}
+          {kind === 'SCORE_SHEET' && <TextField label="Panel member" value={f.person ?? ''} onChange={set('person')} />}
+          {kind === 'SCORE_SHEET' && SCORE_FIELDS.map((k) => <SelectField key={k} label={`${k.charAt(0).toUpperCase()}${k.slice(1)} (1 to 5)`} value={f[k] ?? '3'} onChange={set(k)}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</SelectField>)}
+          {kind === 'REFERENCE_CHECKED' && <TextField label="Referee name" value={f.person ?? ''} onChange={set('person')} />}
+          {kind === 'REFERENCE_CHECKED' && <SelectField label="What they said" value={f.outcome ?? 'POSITIVE'} onChange={set('outcome')}><option value="POSITIVE">Positive</option><option value="CONCERNS">Concerns</option></SelectField>}
+          {kind === 'GUARANTOR_RECORDED' && <TextField label="Guarantor name" value={f.person ?? ''} onChange={set('person')} />}
+          {kind === 'GUARANTOR_RECORDED' && <TextField label="Relationship" value={f.relationship ?? ''} onChange={set('relationship')} />}
+          {kind === 'GUARANTOR_RECORDED' && <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.idSeen === 'yes'} onChange={set('idSeen')} />I checked the guarantor's ID. Do not enter their phone number or address.</label>}
+          {kind !== 'GUARANTOR_RECORDED' && <div className="sm:col-span-2"><TextField label="Note (optional, private to you)" maxLength={200} value={f.note ?? ''} onChange={set('note')} /></div>}
+          <div className="sm:col-span-2"><Button type="submit" variant="accent" size="sm" loading={add.isPending}>Record step</Button></div>
+        </form>
+      ) : <p className="mt-3 text-sm text-muted">This application is decided, so its record is closed.</p>}
+    </Card>
+  );
+}
+
 export default function CandidatePage() {
   const { id } = useParams();
   const q = useCandidate(id);
@@ -231,6 +322,8 @@ export default function CandidatePage() {
 
           <Card className="p-5"><ProfileSummary p={v.profile} /></Card>
           <InterviewForm view={v} onError={setError} />
+          <SelectionSteps applicationId={v.application.id} onError={setError} />
+          <EmployerOffer applicationId={v.application.id} accepted={v.application.status === 'ACCEPTED'} />
 
           <Card className="p-5">
             <h3 className="font-semibold">History</h3>

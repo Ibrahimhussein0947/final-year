@@ -27,4 +27,13 @@ describe('notification wording', () => {
     expect(t).toContain('2 other open jobs fit you');
     expect(t).toContain('stays available');
   });
+  it('describes each step of an offer for the right person', () => {
+    expect(notificationText(n('offer.made', { jobTitle: 'Driver', organizationName: 'Abay Transport', startDate: '2026-12-01', respondBy: '2026-11-25' }))).toContain('Abay Transport sent you a job offer');
+    expect(notificationText(n('offer.responded', { jobTitle: 'Driver', candidateName: 'Abebe', accepted: true, startDate: '2026-12-01' }))).toContain('Abebe accepted your offer');
+    expect(notificationText(n('offer.responded', { jobTitle: 'Driver', candidateName: 'Abebe', accepted: false }))).toContain('declined');
+    expect(notificationText(n('offer.reminder', { jobTitle: 'Driver', kind: 'start', audience: 'worker', startDate: '2026-12-01' }))).toContain('starts on 2026-12-01');
+    expect(notificationText(n('offer.reminder', { jobTitle: 'Driver', kind: 'answer', respondBy: '2026-11-25' }))).toContain('runs out on 2026-11-25');
+    expect(notificationLink(n('offer.made', { jobId: 'j1' }), 'WORKER')).toBe('/applications');
+    expect(notificationLink(n('offer.responded', { jobId: 'j1' }), 'EMPLOYER')).toBe('/employer/jobs/j1/applications');
+  });
 });

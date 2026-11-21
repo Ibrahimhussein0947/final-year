@@ -50,6 +50,22 @@ export const CATEGORIES: { slug: string; name: string; icon: LucideIcon; example
   { slug: 'delivery-courier', name: 'Delivery and Courier Services', icon: Bike, examples: 'Motorbike delivery, courier, taxi, bajaj' },
   { slug: 'human-resources', name: 'Human Resources and Recruitment', icon: Users, examples: 'Recruiting, payroll, training, employee relations' },
   { slug: 'data-analytics', name: 'Data, AI and Analytics', icon: BarChart3, examples: 'Data analysis, BI, machine learning' },
+  { slug: 'printing-publishing', name: 'Printing and Publishing', icon: Package, examples: 'Printing, layout, binding, editing' },
+  { slug: 'funeral-services', name: 'Funeral and Memorial Services', icon: HeartHandshake, examples: 'Funeral coordination, cemetery care' },
+  { slug: 'event-management', name: 'Event Management and Decoration', icon: Music, examples: 'Event planning, decoration, sound and lighting' },
+  { slug: 'interior-landscape', name: 'Interior and Landscape Design', icon: Home, examples: 'Interior design, landscaping' },
+  { slug: 'quality-assurance', name: 'Quality Assurance and Inspection', icon: ShieldCheck, examples: 'Quality inspection, testing, calibration' },
+  { slug: 'compliance-audit', name: 'Compliance and Auditing', icon: Scale, examples: 'Internal audit, regulatory compliance' },
+  { slug: 'robotics-automation', name: 'Robotics and Automation', icon: Wrench, examples: 'Robot maintenance, embedded systems' },
+  { slug: 'blockchain-digital', name: 'Blockchain and Digital Assets', icon: Laptop, examples: 'Smart contracts, digital asset operations' },
+  { slug: 'gaming-interactive', name: 'Gaming and Interactive Media', icon: Laptop, examples: 'Game development, game testing' },
+  { slug: 'heritage-culture', name: 'Archaeology, Heritage and Culture', icon: Landmark, examples: 'Museum curation, archives, fieldwork' },
+  { slug: 'personal-assistance', name: 'Personal and Executive Assistance', icon: Briefcase, examples: 'Personal assistant, scheduling, travel admin' },
+  { slug: 'occupational-safety', name: 'Occupational Health and Safety', icon: HardHat, examples: 'Safety inspection, first aid, fire safety' },
+  { slug: 'cybersecurity-services', name: 'Cybersecurity', icon: ShieldCheck, examples: 'Network security, penetration testing' },
+  { slug: 'space-satellite', name: 'Space and Satellite Services', icon: Radio, examples: 'Satellite technician, earth observation' },
+  { slug: 'ecommerce', name: 'E-commerce Operations', icon: ShoppingBag, examples: 'Online store, order fulfilment' },
+  { slug: 'digital-content', name: 'Digital Content Creation', icon: Smartphone, examples: 'Content creator, streamer' },
 ];
 
 export const REGIONS = [
@@ -77,4 +93,5 @@ export const ORG_TYPES: [string, string][] = [
 
 export const EMPLOYMENT_TYPES = [
   'Full-time', 'Part-time', 'Temporary', 'Contract', 'Freelance', 'Internship', 'Seasonal', 'Daily',
+  'Permanent', 'Casual', 'Apprenticeship', 'Volunteer', 'Gig', 'On-call',
 ];

@@ -10,6 +10,12 @@ describe('formatSalary', () => {
     expect(formatSalary(5000, null)).toBe('From 5,000 ETB');
     expect(formatSalary(null, 9000)).toBe('Up to 9,000 ETB');
     expect(formatSalary(null, null)).toBeNull();
+    // with a basis the amount says what it is per, so a daily wage is never read as a monthly salary
+    expect(formatSalary(500, 700, 'ETB', 'DAILY')).toBe('500 – 700 ETB per day');
+    expect(formatSalary(60, 60, 'ETB', 'HOURLY')).toBe('60 ETB per hour');
+    expect(formatSalary(8000, 8000, 'ETB', 'MONTHLY')).toBe('8,000 ETB per month');
+    expect(formatSalary(null, null, 'ETB', 'NEGOTIABLE')).toBe('Negotiable');
+    expect(formatSalary(3000, 3000, 'ETB', 'UNPAID')).toBe('Unpaid (volunteering)');
   });
 });
 

@@ -1,5 +1,5 @@
 import { getPolicy } from '../hiring/service';
-import { planStatus } from '../subscriptions/service';
+import { cancelPlanRequest, planRequestSchema, plansForEmployer, planStatus, requestPlan } from '../subscriptions/service';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -75,6 +75,28 @@ export function employersRouter() {
     const ep = await prisma.employerProfile.findUnique({ where: { userId: req.user!.id }, select: { organizationId: true } });
     if (!ep) throw notFound('Organization not found');
     res.json(await planStatus(ep.organizationId));
+  });
+
+  // Ask for another plan. An administrator decides; nothing is charged by the system.
+  router.get('/me/plans', ...mine, async (req, res) => {
+    const ep = await prisma.employerProfile.findUnique({ where: { userId: req.user!.id }, select: { organizationId: true } });
+    if (!ep) throw notFound('Organization not found');
+    res.json(await plansForEmployer(ep.organizationId));
+  });
+  router.post('/me/plan-requests', ...mine, validateBody(planRequestSchema), async (req, res) => {
+    const ep = await prisma.employerProfile.findUnique({ where: { userId: req.user!.id }, select: { organizationId: true } });
+    if (!ep) throw notFound('Organization not found');
+    const created = await requestPlan(req.user!.id, ep.organizationId, req.body);
+    await audit(req, req.user!.id, 'employer.plan_requested', 'Organization', ep.organizationId, { plan: created.plan.name });
+    res.status(201).json({ request: created });
+  });
+  router.delete('/me/plan-requests/:id', ...mine, async (req, res) => {
+    const ep = await prisma.employerProfile.findUnique({ where: { userId: req.user!.id }, select: { organizationId: true } });
+    if (!ep) throw notFound('Organization not found');
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success) throw notFound('No waiting request found');
+    await cancelPlanRequest(ep.organizationId, id.data);
+    res.status(204).end();
   });
 
   // The hiring rules that apply to this organization because of its type (see docs/12-hiring-rules.md).

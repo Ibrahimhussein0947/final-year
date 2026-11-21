@@ -1,4 +1,8 @@
+import { assertWorkerDocuments } from '../documents/status';
+import { assertCvAgreesWithProfile } from '../verification/service';
 import { assertDecisionAllowed, getPolicy, rulesView } from '../hiring/service';
+import { assertRequiredSteps } from '../hiring/steps';
+import { appealState } from '../hiring/appeals';
 import { markInvitationApplied } from '../talent/service';
 import type { ApplicationStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -10,6 +14,9 @@ import { getPublicProfile, workerIdFor } from '../workers/service';
 import { orgIdFor } from '../jobs/service';
 import { findClashes, makeVideoRoom } from './interviews';
 import { assertCanReview } from '../subscriptions/service';
+import { rejectionTips, type ProfileState } from './tips';
+import { canReviewEmployer } from '../reviews/service';
+import { trustOf } from '../workers/trust';
 import { CONTACT_VISIBLE, INTERVIEWABLE, WORKER_CAN_WITHDRAW, EMPLOYER_TRANSITIONS, canEmployerMove } from './transitions';
 
 const DAILY_APPLICATION_LIMIT = 30;
@@ -30,7 +37,7 @@ export function mismatchReasons(m: { missingSkills: string[]; criteria: { unmet:
 const jobBrief = {
   select: {
     id: true, title: true, status: true, deadline: true, vacancies: true, organizationId: true, workMode: true,
-    organization: { select: { id: true, name: true, verificationStatus: true } },
+    organization: { select: { id: true, name: true, verificationStatus: true, type: true } },
     location: { select: { nameEn: true, parent: { select: { nameEn: true } } } },
   },
 } as const;
@@ -46,6 +53,10 @@ const interviewOut = (i: { id: string; scheduledAt: Date; mode: string; location
 
 export async function apply(userId: string, jobId: string, coverNote: string | null, opts: { auto?: boolean } = {}) {
   const workerId = await workerIdFor(userId);
+  // The documents every worker has to send before applying (an ID document and a profile photo).
+  await assertWorkerDocuments(workerId);
+  // A CV that contradicts the profile (someone else's name, inflated education or experience) is declined here, with reasons.
+  const cvCheck = await assertCvAgreesWithProfile(workerId);
   const job = await prisma.job.findFirst({
     where: { id: jobId, status: 'ACTIVE', OR: [{ deadline: null }, { deadline: { gte: new Date() } }] },
     select: { id: true, title: true, postedById: true, organizationId: true },
@@ -81,7 +92,7 @@ export async function apply(userId: string, jobId: string, coverNote: string | n
   await markInvitationApplied(jobId, workerId);
 
   // Recipient: the person who posted the job.
-  await notify(job.postedById, 'application.received', { applicationId: id, jobId, jobTitle: job.title, autoApplied: !!opts.auto });
+  await notify(job.postedById, 'application.received', { applicationId: id, jobId, jobTitle: job.title, autoApplied: !!opts.auto, ...(cvCheck ? { cvCheck: cvCheck.outcome, cvWarnings: cvCheck.findings.filter((f) => f.severity === 'warn').length } : {}) });
   return id;
 }
 
@@ -101,18 +112,32 @@ export async function withdraw(userId: string, applicationId: string) {
 
 export async function myApplications(userId: string) {
   const workerId = await workerIdFor(userId);
+  const profileState = async (): Promise<ProfileState> => {
+    const [w, t] = await Promise.all([
+      prisma.workerProfile.findUniqueOrThrow({ where: { id: workerId }, select: { cvFileId: true, photoFileId: true, _count: { select: { skills: true } } } }),
+      trustOf(workerId),
+    ]);
+    return { hasCv: !!w.cvFileId, hasPhoto: !!w.photoFileId, identityVerified: t.proven.identity, hasCertificates: t.proven.credentials, skillCount: w._count.skills };
+  };
   const rows = await prisma.application.findMany({
     where: { workerId },
     orderBy: { updatedAt: 'desc' },
-    include: { job: jobBrief, interviews: { orderBy: { scheduledAt: 'asc' } }, history: { orderBy: { createdAt: 'asc' } } },
+    include: { job: jobBrief, interviews: { orderBy: { scheduledAt: 'asc' } }, history: { orderBy: { createdAt: 'asc' } }, review: { select: { rating: true } }, appeal: true, steps: { select: { kind: true } } },
   });
-  return rows.map((a) => ({
+  const state = rows.some((a) => a.status === 'REJECTED' && a.matchSnapshot) ? await profileState() : null;
+  return Promise.all(rows.map(async (a) => ({
     id: a.id,
     status: a.status,
     qualified: isQualified(a.matchSnapshot as { score?: number; eligibility?: string } | null),
     autoApplied: a.autoApplied,
     // Why the match fell short, from the match stored when the person applied (only shown once not selected).
     notSelectedReasons: a.status === 'REJECTED' && a.matchSnapshot ? mismatchReasons(a.matchSnapshot as Parameters<typeof mismatchReasons>[0]) : [],
+    notSelectedTips: a.status === 'REJECTED' && state ? rejectionTips(a.matchSnapshot as Parameters<typeof rejectionTips>[0], state) : [],
+    review: a.review ? { rating: a.review.rating } : null,
+    // What the employer did to select people, in plain kinds (never the scores or notes), so the process is not a black box.
+    selectionSteps: [...new Set(a.steps.map((s) => s.kind))],
+    appeal: await appealState({ id: a.id, status: a.status, orgType: a.job.organization.type }, a.appeal),
+    canReview: !a.review && canReviewEmployer(a.status, a.interviews.length),
     coverNote: a.coverNote,
     appliedAt: a.createdAt,
     updatedAt: a.updatedAt,
@@ -120,7 +145,7 @@ export async function myApplications(userId: string) {
     interviews: a.interviews.map(interviewOut),
     history: a.history.map((h) => ({ from: h.fromStatus, to: h.toStatus, note: h.note, at: h.createdAt })),
     canWithdraw: WORKER_CAN_WITHDRAW.includes(a.status),
-  }));
+  })));
 }
 
 export async function saveJob(userId: string, jobId: string) {
@@ -270,6 +295,8 @@ export async function changeStatus(userId: string, applicationId: string, to: Ap
   if (app.status === 'PENDING') await assertCanReview(await orgIdFor(userId));
   // Hiring rules of the organization type: a written reason, a closed announcement, a recorded interview.
   if (to === 'ACCEPTED' || to === 'REJECTED') await assertDecisionAllowed({ applicationId: app.id, orgType: app.job.organization.type, job: app.job, to, note });
+  // The recruitment methods of this kind of organization (written exam, selection panel, references...) must have been recorded.
+  if (to === 'ACCEPTED') await assertRequiredSteps(await getPolicy(app.job.organization.type), app.id, app.worker.id);
   await prisma.$transaction([
     prisma.application.update({ where: { id: app.id }, data: { status: to } }),
     prisma.applicationStatusHistory.create({ data: { applicationId: app.id, fromStatus: app.status, toStatus: to, byUserId: userId, note } }),
@@ -344,7 +371,7 @@ export async function rescheduleInterview(
   const video = resolveVideo(input, existing.videoRoom);
   await prisma.interview.update({
     where: { id: interviewId },
-    data: { scheduledAt: input.scheduledAt, mode: input.mode, remindedDayAt: null, remindedHourAt: null, ...(video.keep ? {} : { locationOrLink: video.locationOrLink, videoRoom: video.videoRoom }) },
+    data: { scheduledAt: input.scheduledAt, mode: input.mode, remindedDayAt: null, remindedHourAt: null, workerResponse: 'PENDING', respondedAt: null, declineNote: null, ...(video.keep ? {} : { locationOrLink: video.locationOrLink, videoRoom: video.videoRoom }) },
   });
   await notify(app.worker.userId, 'interview.scheduled', {
     applicationId: app.id, jobId: app.job.id, jobTitle: app.job.title, scheduledAt: input.scheduledAt.toISOString(), mode: input.mode, rescheduled: true,
@@ -427,6 +454,7 @@ export async function employerMayReadCv(employerUserId: string, cvFileId: string
           { education: { some: { evidenceFileId: cvFileId } } },
           { certifications: { some: { evidenceFileId: cvFileId } } },
           { activities: { some: { evidenceFileId: cvFileId } } },
+          { experiences: { some: { evidenceFileId: cvFileId } } },
         ],
       },
       job: { organization: { employers: { some: { userId: employerUserId } } } },

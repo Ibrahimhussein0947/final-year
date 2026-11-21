@@ -3,14 +3,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { BadgeCheck, Clock, ShieldAlert, Upload } from 'lucide-react';
-import { Alert, Badge, Card, Skeleton, SelectField, TextAreaField, TextField } from '@/components/ui/primitives';
+import { Alert, Card, Skeleton, SelectField, TextAreaField, TextField } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { SaveStatus, SectionCard } from '@/pages/worker/sections';
 import { api, ApiError } from '@/lib/api';
 import { useLocations, type SaveState } from '@/lib/profile';
-import { OrgTypeDocuments, OrgTypeOptions } from '@/components/OrgTypeFields';
+import { OrgTypeOptions } from '@/components/OrgTypeFields';
+import { DocumentsSummary } from '@/components/DocumentsSummary';
 import { HiringRulesNotice } from '@/components/HiringRulesNotice';
 import { PlanCard } from '@/components/PlanCard';
 
@@ -93,41 +93,6 @@ function OrgForm({ data }: { data: OrgResponse }) {
   );
 }
 
-function VerificationCard({ data }: { data: OrgResponse }) {
-  const status = data.organization.verificationStatus;
-  const send = useOrgAction((file: File) => {
-    const body = new FormData();
-    body.append('file', file);
-    return api<OrgResponse>('/employers/me/verification', { method: 'POST', body });
-  });
-  const withdraw = useOrgAction((_: void) => api<OrgResponse>('/employers/me/verification', { method: 'DELETE' }));
-
-  const badge =
-    status === 'VERIFIED' ? <Badge tone="success"><BadgeCheck className="h-3 w-3" aria-hidden /> Verified</Badge>
-    : status === 'PENDING' ? <Badge tone="warning"><Clock className="h-3 w-3" aria-hidden /> Under review</Badge>
-    : status === 'REJECTED' ? <Badge tone="danger">Rejected</Badge>
-    : <Badge><ShieldAlert className="h-3 w-3" aria-hidden /> Not verified</Badge>;
-
-  return (
-    <SectionCard title="Employer verification" description="Upload a business license, tax registration or similar document (PDF, JPG or PNG up to 5 MB). The Verified badge is only shown after an administrator reviews it.">
-      <OrgTypeDocuments value={data.organization.type} />
-      <div className="flex flex-wrap items-center gap-3">
-        {badge}
-        {(status === 'UNVERIFIED' || status === 'REJECTED') && (
-          <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent hover:bg-accent-hover">
-            <Upload className="h-4 w-4" aria-hidden /> {send.isPending ? 'Uploading…' : 'Upload document'}
-            <input type="file" accept="application/pdf,image/jpeg,image/png" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) send.mutate(f); e.target.value = ''; }} />
-          </label>
-        )}
-        {status === 'PENDING' && <Button variant="outline" size="sm" loading={withdraw.isPending} onClick={() => withdraw.mutate()}>Withdraw request</Button>}
-        <SaveStatus state={send.state.status !== 'idle' ? send.state : withdraw.state} />
-      </div>
-      {data.latestVerificationRequest?.note && <p className="mt-3 text-sm text-muted">Reviewer note: {data.latestVerificationRequest.note}</p>}
-      <p className="mt-3 text-xs text-muted">Administrator review is built in a later phase, so requests stay pending for now.</p>
-    </SectionCard>
-  );
-}
-
 export default function OrganizationPage() {
   const q = useOrg();
   return (
@@ -140,7 +105,7 @@ export default function OrganizationPage() {
           <div className="space-y-5">
             <Card className="p-5"><p className="text-sm text-muted">Signed in as the contact for</p><p className="text-lg font-bold">{q.data.organization.name}</p></Card>
             <OrgForm data={q.data} />
-            <VerificationCard data={q.data} />
+            <DocumentsSummary />
           </div>
         )}
       </PageBody>

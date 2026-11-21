@@ -167,7 +167,8 @@ export function RegisterPage() {
         email: v.email || undefined,
         ...(v.role === 'WORKER' ? { organizationName: undefined, organizationType: undefined } : {}),
       });
-      navigate('/dashboard', { replace: true });
+      // A new job seeker or employer starts by sending their documents; the page explains what is needed and why.
+      navigate(v.role === 'WORKER' || v.role === 'EMPLOYER' ? '/documents' : '/dashboard', { replace: true });
     } catch (err) {
       setFormError(applyServerError(err, setError));
     }

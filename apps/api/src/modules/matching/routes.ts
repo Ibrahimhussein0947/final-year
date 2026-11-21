@@ -7,7 +7,8 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 import { validateBody } from '../../middleware/common';
 import { detailInclude, orgIdFor, ownedJob, toListItem } from '../jobs/service';
 import { workerIdFor } from '../workers/service';
-import { publicMatch, recommendJobs, recommendWorkers, scoreOne } from './service';
+import { publicMatch, recommendJobs, recommendWorkers, scoreJobsForWorker, scoreOne } from './service';
+import { fitOf } from './fit';
 import { clearMatchingCaches, getWeights, parseStoredWeights, weightsInputSchema } from './weights';
 import { COMPONENT_KEYS, DEFAULT_WEIGHTS } from './types';
 
@@ -65,6 +66,12 @@ export function matchingRouter() {
       reason,
       items: items.map(({ jobId, result }) => ({ job: toListItem(byId.get(jobId)!), match: publicMatch(result) })),
     });
+  });
+
+  // Worker: a one-line fit for each job on the page ("you meet 4 of 6 requirements").
+  router.post('/jobs/fit', requireAuth, requireRole('WORKER'), validateBody(z.object({ jobIds: z.array(z.string().uuid()).min(1).max(30) }).strict()), async (req, res) => {
+    const scored = await scoreJobsForWorker(await workerIdFor(req.user!.id), [...new Set(req.body.jobIds as string[])]);
+    res.json({ items: Object.fromEntries([...scored].map(([id, m]) => [id, fitOf(m)])) });
   });
 
   // Worker: why (or why not) does this job fit me.

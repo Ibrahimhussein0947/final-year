@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 export function RecommendedJobCard({ item }: { item: RecommendedJob }) {
   const [open, setOpen] = useState(false);
   const { job, match } = item;
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency);
+  const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, (job as { payBasis?: string | null }).payBasis);
   return (
     <li>
       <Card className="p-4 sm:p-5">

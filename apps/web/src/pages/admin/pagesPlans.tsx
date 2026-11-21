@@ -85,6 +85,46 @@ function OrgRow({ o, plans }: { o: OrgSub; plans: Plan[] }) {
   );
 }
 
+interface PlanRequest { id: string; note: string | null; createdAt: string; plan: { id: string; name: string }; currentPlan: string; organization: { id: string; name: string; type: string } }
+
+function RequestRow({ r }: { r: PlanRequest }) {
+  const [endsAt, setEndsAt] = useState('');
+  const [pay, setPay] = useState('');
+  const [why, setWhy] = useState('');
+  const opts = { invalidate: ['plan-requests', 'subscriptions', 'plans'] };
+  const approve = useAdminAction(() => api(`/admin/plan-requests/${r.id}/approve`, { method: 'POST', body: { endsAt: endsAt || null, paymentNote: pay || null, decisionNote: why || null } }), opts);
+  const decline = useAdminAction(() => api(`/admin/plan-requests/${r.id}/decline`, { method: 'POST', body: { decisionNote: why || null } }), opts);
+  return (
+    <li className="rounded-xl border border-border p-3 text-sm">
+      <p><strong>{r.organization.name}</strong> <span className="text-xs text-muted">({r.organization.type.replace(/_/g, ' ').toLowerCase()})</span> asks to move from {r.currentPlan} to <strong>{r.plan.name}</strong></p>
+      <p className="text-xs text-muted">Sent {new Date(r.createdAt).toLocaleDateString('en-GB')}{r.note ? ` · Their note: ${r.note}` : ''}</p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <input aria-label="End date" type="date" className={select} value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+        <input aria-label="Payment note" className={`${select} w-44`} placeholder="Payment note (optional)" value={pay} onChange={(e) => setPay(e.target.value)} />
+        <input aria-label="Message to the employer" className={`${select} w-56`} placeholder="Message to the employer (optional)" value={why} onChange={(e) => setWhy(e.target.value)} />
+        <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate()}>Approve and assign</Button>
+        <Button size="sm" variant="ghost" className="text-danger" loading={decline.isPending} onClick={() => decline.mutate()}>Decline</Button>
+      </div>
+      {(approve.error || decline.error) && <p role="alert" className="mt-1 text-xs text-danger">{approve.error ?? decline.error}</p>}
+    </li>
+  );
+}
+
+/** Employers' requests for another plan. Approving assigns the plan; payment is agreed outside the system. */
+function PlanRequests() {
+  const q = useAdminQuery<{ items: PlanRequest[] }>(['plan-requests'], '/plan-requests?status=PENDING');
+  const items = q.data?.items ?? [];
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Plan requests {items.length > 0 && <Badge tone="warning">{items.length} waiting</Badge>}</h2>
+      {q.isLoading && <Skeleton className="mt-3 h-16" />}
+      {q.isError && <Alert tone="danger">Could not load requests.</Alert>}
+      {q.data && items.length === 0 && <p className="mt-2 text-sm text-muted">No requests waiting.</p>}
+      {items.length > 0 && <ul className="mt-3 space-y-3">{items.map((r) => <RequestRow key={r.id} r={r} />)}</ul>}
+    </Card>
+  );
+}
+
 /** Plans with limits, and which employer is on which plan. No payments are taken: the administrator records how an employer paid. */
 export function AdminPlans() {
   const plans = useAdminQuery<{ items: Plan[] }>(['plans'], '/plans');
@@ -98,6 +138,8 @@ export function AdminPlans() {
         A plan sets what an employer may do: how many jobs can be open at once, how many invitations to apply they can send each month, and whether they can search workers.
         Employers without a plan get the default plan. The system takes no payment; record how an employer paid in the payment note when you assign a plan.
       </Alert>
+
+      <PlanRequests />
 
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -21,6 +21,7 @@ export async function exportMyData(userId: string, req: Request) {
       id: true, phone: true, email: true, fullName: true, role: true, status: true, locale: true,
       phoneVerifiedAt: true, emailVerifiedAt: true, lastLoginAt: true, createdAt: true,
       notifyJobMatches: true, notifySms: true, autoApply: true, autoApplyMinScore: true,
+      notifyTelegram: true, telegramLinkedAt: true, // the chat id itself is not exported: it identifies the Telegram account
     },
   });
   if (!user) throw notFound();
@@ -114,6 +115,11 @@ export async function deleteMyAccount(userId: string, password: string, req: Req
         emailVerifiedAt: null,
         notifyJobMatches: false,
         notifySms: false,
+        notifyTelegram: false,
+        telegramChatId: null,
+        telegramLinkedAt: null,
+        telegramLinkHash: null,
+        telegramLinkExpiresAt: null,
         autoApply: false,
         totpSecret: null,
         totpEnabledAt: null,

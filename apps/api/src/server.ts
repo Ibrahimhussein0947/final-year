@@ -5,12 +5,14 @@ import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
 import { attachRealtime, closeRealtime } from './realtime';
 import { startReminderLoop } from './modules/applications/interviews';
+import { startOfferLoop } from './modules/offers/service';
 
 const app = createApp();
 const server = http.createServer(app);
 attachRealtime(server);
 server.listen(env.PORT, () => logger.info(`API listening on http://localhost:${env.PORT}`));
 startReminderLoop();
+startOfferLoop();
 
 async function shutdown() {
   await closeRealtime();

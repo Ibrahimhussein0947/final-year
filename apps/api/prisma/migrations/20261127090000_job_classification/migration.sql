@@ -1,0 +1,12 @@
+-- More ways to employ someone, the seniority of a position, and the groups an employer welcomes.
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'PERMANENT';
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'CASUAL';
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'APPRENTICESHIP';
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'VOLUNTEER';
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'GIG';
+ALTER TYPE "EmploymentType" ADD VALUE IF NOT EXISTS 'ON_CALL';
+
+CREATE TYPE "JobSeniority" AS ENUM ('ENTRY', 'JUNIOR', 'INTERMEDIATE', 'SENIOR', 'SPECIALIST', 'SUPERVISOR', 'MANAGER', 'EXECUTIVE');
+
+ALTER TABLE "Job" ADD COLUMN "seniority" "JobSeniority";
+ALTER TABLE "Job" ADD COLUMN "openTo" TEXT[] DEFAULT ARRAY[]::TEXT[];

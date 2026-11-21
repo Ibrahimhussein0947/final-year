@@ -41,7 +41,7 @@ const adminToken = () => jwt.sign({ role: 'ADMIN' }, env.JWT_ACCESS_SECRET, { su
 /** COOPERATIVE has no rules by default; the administrator test edits it. Reset it directly so an interrupted earlier run cannot leave it changed. */
 const resetCooperative = () => prisma.hiringPolicy.upsert({
   where: { organizationType: 'COOPERATIVE' },
-  update: { label: null, minAnnouncementDays: 0, requireVerified: false, requireDeadline: false, requireSalary: false, requireReference: false, requireDecisionNote: false, requireInterview: false },
+  update: { label: null, minAnnouncementDays: 0, requireVerified: false, requireDeadline: false, requireSalary: false, requireReference: false, requireDecisionNote: false, requireInterview: false, requiredSteps: [], suggestedSteps: ['ID_VERIFIED', 'REFERENCE_CHECKED'], panelSize: 1, maxProbationDays: 45, appealDays: 0 },
   create: { organizationType: 'COOPERATIVE' },
 });
 
@@ -222,6 +222,17 @@ describe('deciding on candidates', () => {
 
     const iv = await request(app).post(`/api/v1/applications/${appId}/interviews`).set(auth(e.token)).send({ scheduledAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), mode: 'IN_PERSON', locationOrLink: 'Head office, room 4' });
     expect(iv.status, JSON.stringify(iv.body)).toBe(201);
+
+    // 4. the recruitment methods of a government office: ID checked, written exam, a panel of three (see hiring-methods.test.ts)
+    const steps = await status(e, appId, 'ACCEPTED', 'Best score in the written assessment and interview.');
+    expect(steps.status).toBe(409);
+    expect(steps.body.error.code).toBe('STEPS_REQUIRED');
+    const worker = await prisma.application.findUniqueOrThrow({ where: { id: appId }, select: { workerId: true, worker: { select: { userId: true } } } });
+    await prisma.verificationRequest.create({ data: { userId: worker.worker.userId, kind: 'IDENTITY', targetType: 'NATIONAL_ID', targetId: worker.workerId, status: 'APPROVED' } });
+    await prisma.hiringStep.createMany({ data: [
+      { applicationId: appId, kind: 'WRITTEN_EXAM', data: { score: 78, examDate: day(-5) }, recordedById: e.id },
+      ...['Abebe Kebede', 'Almaz Tesfaye', 'Dawit Hailu'].map((panelist) => ({ applicationId: appId, kind: 'SCORE_SHEET' as const, data: { panelist, scores: { skills: 4, experience: 4, communication: 4, suitability: 4 } }, recordedById: e.id })),
+    ] });
 
     const done = await status(e, appId, 'ACCEPTED', 'Best score in the written assessment and interview.');
     expect(done.status, JSON.stringify(done.body)).toBe(200);

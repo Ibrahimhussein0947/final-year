@@ -61,6 +61,12 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 
 | Method | Path | Access |
 |---|---|---|
+| GET | `/workers/me/portfolio` | signed in, worker only |
+| POST | `/workers/me/portfolio` | signed in, worker only |
+| PATCH | `/workers/me/portfolio/:id` | signed in, worker only |
+| DELETE | `/workers/me/portfolio/:id` | signed in, worker only |
+| GET | `/workers/me/cv.pdf` | signed in, worker only |
+| GET | `/workers/me/trust` | signed in, worker only |
 | GET | `/workers/me` | signed in, worker only |
 | PATCH | `/workers/me` | signed in, worker only |
 | GET | `/workers/me/views` | signed in, worker only |
@@ -95,6 +101,9 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | GET | `/employers/me` | signed in, employer only |
 | GET | `/employers/me/subscription` | signed in, employer only |
+| GET | `/employers/me/plans` | signed in, employer only |
+| POST | `/employers/me/plan-requests` | signed in, employer only |
+| DELETE | `/employers/me/plan-requests/:id` | signed in, employer only |
 | GET | `/employers/me/hiring-rules` | signed in, employer only |
 | PATCH | `/employers/me` | signed in, employer only |
 | POST | `/employers/me/verification` | signed in, employer only |
@@ -112,6 +121,7 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | GET | `/interviews/config` | signed in, worker or employer only |
 | GET | `/interviews/:id/join` | signed in, worker or employer only |
+| POST | `/interviews/:id/respond` | signed in, worker or employer only |
 | GET | `/interviews/mine` | signed in, worker or employer only |
 | GET | `/interviews/mine.ics` | signed in, worker or employer only |
 
@@ -136,7 +146,27 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | POST | `/jobs/:id/feature` | signed in, employer only |
 | DELETE | `/jobs/:id` | signed in, employer only |
 | GET | `/jobs` | public |
+| GET | `/jobs/salary-guide` | public |
 | GET | `/jobs/:id` | public (signed-in users get extra fields) |
+
+## marketplace — `apps/api/src/modules/marketplace/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/services` | public |
+| POST | `/services/ask` | public |
+| GET | `/services/mine` | signed in, worker only |
+| POST | `/services` | signed in, worker only |
+| GET | `/services/inquiries/received` | signed in, worker only |
+| GET | `/services/inquiries/sent` | signed in, worker or employer only |
+| POST | `/services/inquiries/:id/respond` | signed in, worker only |
+| POST | `/services/inquiries/:id/cancel` | signed in, worker or employer only |
+| GET | `/services/:id` | public (signed-in users get extra fields) |
+| PATCH | `/services/:id` | signed in, worker only |
+| POST | `/services/:id/publish` | signed in, worker only |
+| POST | `/services/:id/pause` | signed in, worker only |
+| DELETE | `/services/:id` | signed in, worker only |
+| POST | `/services/:id/inquiries` | signed in, worker or employer only |
 
 ## applications — `apps/api/src/modules/applications/routes.ts`
 
@@ -163,6 +193,7 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | GET | `/jobs/:id/recommended-workers` | signed in, employer only |
 | GET | `/recommendations/jobs` | signed in, worker only |
+| POST | `/jobs/fit` | signed in, worker only |
 | GET | `/jobs/:id/match` | signed in, worker only |
 | GET | `/admin/match-weights` | signed in, admin only |
 | PUT | `/admin/match-weights` | signed in, admin only |
@@ -201,6 +232,77 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | GET | `/analytics/worker` | signed in, worker only |
 | GET | `/analytics/employer` | signed in, employer only |
 
+## documents — `apps/api/src/modules/documents/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/workers/me/identity` | signed in, worker only |
+| PUT | `/workers/me/identity` | signed in, worker only |
+| GET | `/employers/me/legal` | signed in, employer only |
+| PUT | `/employers/me/legal` | signed in, employer only |
+| GET | `/documents/checklist` | signed in, worker or employer only |
+| GET | `/documents` | signed in, worker or employer only |
+| POST | `/documents` | signed in, worker or employer only |
+| DELETE | `/documents/:id` | signed in, worker or employer only |
+| GET | `/workers/me/documents` | signed in, worker only |
+| POST | `/workers/me/documents` | signed in, worker only |
+| DELETE | `/workers/me/documents/:id` | signed in, worker only |
+
+## reviews — `apps/api/src/modules/reviews/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| POST | `/applications/:id/review` | signed in, worker only |
+| GET | `/organizations/:id/rating` | public |
+| GET | `/employers/me/rating` | signed in, employer only |
+
+## offers — `apps/api/src/modules/offers/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| POST | `/applications/:id/offer` | signed in, employer only |
+| GET | `/offers/sent` | signed in, employer only |
+| POST | `/offers/:id/withdraw` | signed in, employer only |
+| GET | `/offers/mine` | signed in, worker only |
+| POST | `/offers/:id/respond` | signed in, worker only |
+| POST | `/offers/:id/started` | signed in, worker or employer only |
+
+## hiring — `apps/api/src/modules/hiring/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/applications/:id/hiring` | signed in, employer only |
+| POST | `/applications/:id/steps` | signed in, employer only |
+| DELETE | `/applications/:id/steps/:stepId` | signed in, employer only |
+| POST | `/applications/:id/appeal` | signed in, worker only |
+| GET | `/applications/:id/appeal` | signed in, employer only |
+| POST | `/applications/:id/appeal/answer` | signed in, employer only |
+
+## skillTests — ``
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/skill-tests` | signed in, worker only |
+| POST | `/skill-tests/:id/start` | signed in, worker only |
+| POST | `/skill-test-attempts/:id/submit` | signed in, worker only |
+
+## skillTestsAdmin — ``
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/admin/skill-tests` | signed in, admin only |
+| POST | `/admin/skill-tests` | signed in, admin only |
+| PATCH | `/admin/skill-tests/:id` | signed in, admin only |
+| DELETE | `/admin/skill-tests/:id` | signed in, admin only |
+
+## verification — `apps/api/src/modules/verification/routes.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/workers/me/cv-check` | signed in, worker only |
+| POST | `/workers/me/cv-check` | signed in, worker only |
+| GET | `/workers/me/opportunities` | signed in, worker only |
+
 ## trainingAdmin — ``
 
 | Method | Path | Access |
@@ -230,6 +332,9 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | GET | `/admin/plans` | signed in, admin only |
 | POST | `/admin/plans` | signed in, admin only |
 | PATCH | `/admin/plans/:id` | signed in, admin only |
+| GET | `/admin/plan-requests` | signed in, admin only |
+| POST | `/admin/plan-requests/:id/approve` | signed in, admin only |
+| POST | `/admin/plan-requests/:id/decline` | signed in, admin only |
 | GET | `/admin/subscriptions` | signed in, admin only |
 | POST | `/admin/organizations/:id/subscription` | signed in, admin only |
 | DELETE | `/admin/organizations/:id/subscription` | signed in, admin only |
@@ -257,7 +362,11 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | PUT | `/admin/translations` | signed in, admin only |
 | DELETE | `/admin/translations/:locale/:key` | signed in, admin only |
 | GET | `/admin/audit` | signed in, admin only |
+| POST | `/admin/locations` | signed in, admin only |
+| PATCH | `/admin/locations/:id` | signed in, admin only |
 | GET | `/admin/analytics/national` | signed in, admin only |
+| GET | `/admin/analytics/performance` | signed in, admin only |
+| GET | `/admin/analytics/search-fairness` | signed in, admin only |
 | GET | `/admin/analytics/recommendations` | signed in, admin only |
 | GET | `/admin/export/:kind` | signed in, admin only |
 
@@ -268,7 +377,15 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | GET | `/notifications` | signed in |
 | GET | `/notifications/settings` | signed in |
 | PATCH | `/notifications/settings` | signed in |
+| POST | `/notifications/telegram/link` | signed in |
+| DELETE | `/notifications/telegram` | signed in |
 | POST | `/notifications/read-all` | signed in |
 | POST | `/notifications/:id/read` | signed in |
 
-Total: 165 routes.
+## telegramWebhook — `apps/api/src/modules/notifications/telegram.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| POST | `/telegram/webhook` | public |
+
+Total: 237 routes.
