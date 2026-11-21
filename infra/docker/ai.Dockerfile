@@ -1,6 +1,6 @@
 # NOT BUILT OR RUN YET: the CPU PyTorch wheel and the 470 MB model could not be downloaded on the development network.
 # Build context: the repository root.   docker build -f infra/docker/ai.Dockerfile -t ethiotalent-ai .
-FROM python:3.12-slim
+FROM python:3.15-slim
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 HF_HOME=/models
 WORKDIR /srv
 COPY apps/ai/requirements.txt .
