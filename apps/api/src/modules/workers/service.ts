@@ -124,6 +124,9 @@ export async function getPublicProfile(
     willingToRelocate: p.willingToRelocate,
     maxTravelKm: p.maxTravelKm,
     languages: p.languages,
+    languageLevels: p.languageLevels,
+    objective: p.objective,
+    website: p.website, // address and nationality stay with the owner and the CV
     portfolioUrls: p.portfolioUrls,
     photoUrl: fileUrl(p.photoFileId),
     // Administrative area only (down to woreda), never kebele.
@@ -135,7 +138,7 @@ export async function getPublicProfile(
     education: p.education.map(({ id, level, field, institution, department, gpa, gpaScale, year, source, evidenceFileId }) => ({ id, level, field, institution, department, gpa, gpaScale, year, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     certifications: p.certifications.map(({ id, name, issuer, year, source, evidenceFileId }) => ({ id, name, issuer, year, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     activities: p.activities.map(({ id, kind, title, organization, startDate, endDate, hours, description, source, evidenceFileId }) => ({ id, kind, title, organization, startDate, endDate, hours, description, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
-    experiences: p.experiences.map(({ id, title, employer, startDate, endDate, description, source, evidenceFileId }) => ({ id, title, employer, startDate, endDate, description, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
+    experiences: p.experiences.map(({ id, title, employer, startDate, endDate, description, location, employmentType, reasonLeft, achievements, source, evidenceFileId }) => ({ id, title, employer, startDate, endDate, description, location, employmentType, reasonLeft, achievements, source, hasDocument: !!evidenceFileId, documentUrl: opts.viaApplication ? fileUrl(evidenceFileId) : null })),
     // Answers to the sector questions, with verified marks (self-reported otherwise).
     sectorAnswers: await workerCriteriaForEmployer(p.id),
   };

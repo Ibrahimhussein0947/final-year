@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import {
   ACTIVITY_LABEL, placeLabel, useCategories, useLocations, useProfileAction, useProtectedImage, useSkillSearch,
-  type ActivityKind, type SaveState, type WorkerProfile,
+  LANGUAGE_LEVEL_LABEL, type ActivityKind, type LanguageLevel, type SaveState, type WorkerProfile,
 } from '@/lib/profile';
 import { cn } from '@/lib/cn';
 import { VerifyControl } from '@/pages/worker/VerifyControl';
@@ -96,6 +96,66 @@ export function BasicsForm({ profile }: { profile: WorkerProfile }) {
         <div className="sm:col-span-2">
           <TextAreaField voice label="Biography" hint="At least 20 characters to count towards completion" error={errors.bio?.message} {...register('bio')} />
         </div>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <Button type="submit" variant="accent" loading={save.isPending}>Save</Button>
+          <SaveStatus state={save.state} />
+        </div>
+      </form>
+    </SectionCard>
+  );
+}
+
+// ───────── More CV details ─────────
+
+const cvDetailsSchema = z.object({
+  objective: z.string().trim().max(600),
+  website: z.string().trim().max(300).refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'Start with http:// or https://'),
+  addressLine: z.string().trim().max(150),
+  nationality: z.string().trim().max(60),
+});
+
+/** Extra details that only appear on the worker's own CV (and the objective, website and language levels on the profile employers see). */
+export function CvDetailsForm({ profile }: { profile: WorkerProfile }) {
+  const save = useProfileAction((body: Record<string, unknown>) => api('/workers/me', { method: 'PATCH', body }));
+  const [levels, setLevels] = useState<Record<string, LanguageLevel | ''>>(() => ({ ...profile.languageLevels }));
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof cvDetailsSchema>>({
+    resolver: zodResolver(cvDetailsSchema),
+    defaultValues: { objective: profile.objective ?? '', website: profile.website ?? '', addressLine: profile.addressLine ?? '', nationality: profile.nationality ?? '' },
+  });
+  return (
+    <SectionCard id="section-cvdetails" title="More CV details" description="These make your CV fuller. Your address and nationality appear only on the CV you build yourself, never on the profile employers see.">
+      <form
+        noValidate
+        className="grid gap-4 sm:grid-cols-2"
+        onSubmit={handleSubmit((v) => {
+          const kept = Object.fromEntries(profile.languages.flatMap((l) => (levels[l] ? [[l, levels[l]]] : [])));
+          save.mutate({ objective: v.objective, website: v.website || null, addressLine: v.addressLine, nationality: v.nationality, languageLevels: kept });
+        })}
+      >
+        <div className="sm:col-span-2">
+          <TextAreaField label="Career objective" hint="One or two sentences on the work you want next" rows={2} error={errors.objective?.message} {...register('objective')} />
+        </div>
+        <TextField label="Website or LinkedIn link (optional)" placeholder="https://" error={errors.website?.message} {...register('website')} />
+        <TextField label="Nationality (optional)" {...register('nationality')} />
+        <div className="sm:col-span-2"><TextField label="Address (optional, CV only)" placeholder="e.g. Bole Sub City, House 12" {...register('addressLine')} /></div>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-semibold">How well do you speak each language?</legend>
+          {profile.languages.length === 0 ? (
+            <p className="mt-1 text-sm text-muted">Add your languages in “About you” first, then choose a level for each here.</p>
+          ) : (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {profile.languages.map((l) => (
+                <label key={l} className="flex items-center justify-between gap-3 text-sm">
+                  <span>{l}</span>
+                  <select aria-label={`Level for ${l}`} className="h-9 rounded-lg border border-border bg-surface px-2 text-sm" value={levels[l] ?? ''} onChange={(e) => setLevels({ ...levels, [l]: e.target.value as LanguageLevel | '' })}>
+                    <option value="">Not stated</option>
+                    {(Object.keys(LANGUAGE_LEVEL_LABEL) as LanguageLevel[]).map((k) => <option key={k} value={k}>{LANGUAGE_LEVEL_LABEL[k]}</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
         <div className="flex items-center gap-3 sm:col-span-2">
           <Button type="submit" variant="accent" loading={save.isPending}>Save</Button>
           <SaveStatus state={save.state} />
@@ -357,11 +417,11 @@ function Row({ children, onDelete, label }: { children: ReactNode; onDelete: () 
   );
 }
 
-const expSchema = z.object({ title: z.string().trim().min(2, 'Enter a job title'), employer: z.string().trim(), startDate: z.string().min(1, 'Choose a start date'), endDate: z.string(), description: z.string().trim() });
+const expSchema = z.object({ title: z.string().trim().min(2, 'Enter a job title'), employer: z.string().trim(), startDate: z.string().min(1, 'Choose a start date'), endDate: z.string(), description: z.string().trim(), location: z.string().trim().max(120), employmentType: z.string(), reasonLeft: z.string().trim().max(200), achievements: z.string().trim().max(1000) });
 export function ExperienceSection({ profile }: { profile: WorkerProfile }) {
   const add = useProfileAction((body: Record<string, unknown>) => api('/workers/me/experience', { method: 'POST', body }));
   const del = useProfileAction((id: string) => api(`/workers/me/experience/${id}`, { method: 'DELETE' }));
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof expSchema>>({ resolver: zodResolver(expSchema), defaultValues: { title: '', employer: '', startDate: '', endDate: '', description: '' } });
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof expSchema>>({ resolver: zodResolver(expSchema), defaultValues: { title: '', employer: '', startDate: '', endDate: '', description: '', location: '', employmentType: '', reasonLeft: '', achievements: '' } });
   return (
     <ListShell
       id="section-experience"
@@ -370,17 +430,26 @@ export function ExperienceSection({ profile }: { profile: WorkerProfile }) {
       items={profile.experiences.map((e) => (
         <Row key={e.id} label={`Delete ${e.title}`} onDelete={() => del.mutate(e.id)}>
           <p className="flex flex-wrap items-center gap-2 font-medium">{e.title}{e.employer ? ` · ${e.employer}` : ''} <SourceBadge source={e.source} /> {e.source !== 'VERIFIED' && <VerifyControl targetType="EXPERIENCE" targetId={e.id} />}</p>
-          <p className="text-muted">{e.startDate.slice(0, 7)} to {e.endDate ? e.endDate.slice(0, 7) : 'present'}</p>
+          <p className="text-muted">{[`${e.startDate.slice(0, 7)} to ${e.endDate ? e.endDate.slice(0, 7) : 'present'}`, e.location, e.employmentType && (TYPES.find(([k]) => k === e.employmentType)?.[1] ?? e.employmentType)].filter(Boolean).join(' · ')}</p>
           {e.description && <p className="mt-1">{e.description}</p>}
+          {e.achievements && <p className="mt-1"><span className="font-medium">Achievements:</span> {e.achievements}</p>}
+          {e.reasonLeft && <p className="mt-1 text-muted">Reason for leaving: {e.reasonLeft}</p>}
         </Row>
       ))}
       form={
-        <form noValidate className="grid gap-3 sm:grid-cols-2" onSubmit={handleSubmit((v) => add.mutate({ title: v.title, employer: v.employer, startDate: v.startDate, endDate: v.endDate || null, description: v.description }, { onSuccess: () => reset() }))}>
+        <form noValidate className="grid gap-3 sm:grid-cols-2" onSubmit={handleSubmit((v) => add.mutate({ title: v.title, employer: v.employer, startDate: v.startDate, endDate: v.endDate || null, description: v.description, location: v.location, employmentType: v.employmentType || null, reasonLeft: v.endDate ? v.reasonLeft : '', achievements: v.achievements }, { onSuccess: () => reset() }))}>
           <TextField label="Job title" error={errors.title?.message} {...register('title')} />
           <TextField label="Employer or place" {...register('employer')} />
           <TextField label="Start" type="month" error={errors.startDate?.message} {...register('startDate')} />
           <TextField label="End (leave empty if current)" type="month" {...register('endDate')} />
+          <TextField label="Where was the job? (town or city)" {...register('location')} />
+          <SelectField label="Type of work" {...register('employmentType')}>
+            <option value="">–</option>
+            {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </SelectField>
           <div className="sm:col-span-2"><TextAreaField label="What did you do?" className="min-h-20" {...register('description')} /></div>
+          <div className="sm:col-span-2"><TextAreaField label="What did you achieve? (optional)" hint="For example: trained 3 new workers, finished 40 gates, never missed a delivery" rows={2} {...register('achievements')} /></div>
+          <div className="sm:col-span-2"><TextField label="Why did you leave? (optional, only for jobs that ended)" {...register('reasonLeft')} /></div>
           <div className="flex items-center gap-3 sm:col-span-2"><Button type="submit" variant="outline" loading={add.isPending}>Add work history</Button><SaveStatus state={add.state.status !== 'idle' ? add.state : del.state} /></div>
         </form>
       }
@@ -492,10 +561,11 @@ export function ActivitiesSection({ profile }: { profile: WorkerProfile }) {
     resolver: zodResolver(actSchema), defaultValues: { kind: 'TRAINING', title: '', organization: '', startDate: '', endDate: '', hours: '', description: '' },
   });
   const isRef = watch('kind') === 'REFERENCE';
+  const isAward = watch('kind') === 'AWARD';
   return (
     <ListShell
-      title="Internships, volunteering, training and references"
-      description="For everyone, and especially if you learned your work outside a school: an apprenticeship with a master, a training course, volunteer service, or a person who can vouch for your skills. We do not store the reference's phone number."
+      title="Internships, volunteering, training, awards and references"
+      description="For everyone, and especially if you learned your work outside a school: an apprenticeship with a master, a training course, volunteer service, a prize or award you won, or a person who can vouch for your skills. We do not store the reference's phone number."
       empty="Nothing added yet."
       items={profile.activities.map((a) => (
         <Row key={a.id} label={`Delete ${a.title}`} onDelete={() => del.mutate(a.id)}>
@@ -509,8 +579,8 @@ export function ActivitiesSection({ profile }: { profile: WorkerProfile }) {
           kind: v.kind, title: v.title, organization: v.organization, startDate: v.startDate || null, endDate: v.endDate || null, hours: v.hours ? Number(v.hours) : null, description: v.description,
         }, { onSuccess: () => reset() }))}>
           <SelectField label="Type" {...register('kind')}>{(Object.keys(ACTIVITY_LABEL) as ActivityKind[]).map((k) => <option key={k} value={k}>{ACTIVITY_LABEL[k]}</option>)}</SelectField>
-          <TextField label={isRef ? "Person's name" : 'What (role, course or trade)'} error={errors.title?.message} {...register('title')} />
-          <TextField label={isRef ? 'Who they are to you (former employer, master, village elder…)' : 'Where (company, NGO, training centre, workshop)'} {...register('organization')} />
+          <TextField label={isRef ? "Person's name" : isAward ? 'Name of the award' : 'What (role, course or trade)'} error={errors.title?.message} {...register('title')} />
+          <TextField label={isRef ? 'Who they are to you (former employer, master, village elder…)' : isAward ? 'Given by' : 'Where (company, NGO, training centre, workshop)'} {...register('organization')} />
           {!isRef && <TextField label="Hours (optional)" inputMode="numeric" error={errors.hours?.message} {...register('hours')} />}
           {!isRef && <TextField label="Start" type="date" {...register('startDate')} />}
           {!isRef && <TextField label="End" type="date" error={errors.endDate?.message} {...register('endDate')} />}

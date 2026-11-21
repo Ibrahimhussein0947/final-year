@@ -463,6 +463,12 @@ model WorkerProfile {
   maxTravelKm        Int?
   willingToRelocate  Boolean            @default(false)
   languages          String[]
+  // Extra CV details. `languageLevels` maps a language name to BASIC, GOOD or FLUENT. Address and nationality are for the CV only and are never shown to employers.
+  languageLevels     Json               @default("{}")
+  objective          String?
+  website            String?
+  addressLine        String?
+  nationality        String?
   portfolioUrls      String[]
   photoFileId        String?
   cvFileId           String?
@@ -553,6 +559,10 @@ model WorkExperience {
   startDate      DateTime
   endDate        DateTime?
   description    String?
+  location       String?
+  employmentType EmploymentType?
+  reasonLeft     String?
+  achievements   String?
   // SELF_REPORTED until an administrator approves an experience letter for this job; only that sets VERIFIED.
   source         EvidenceSource @default(SELF_REPORTED)
   evidenceFileId String?
@@ -1270,6 +1280,7 @@ enum ActivityKind {
   TRAINING
   APPRENTICESHIP // learning a trade from a master, common outside formal schooling
   REFERENCE // a person who can vouch for the worker's skills (no contact details are stored or shown)
+  AWARD // a prize, recognition or achievement; `title` is the award and `organization` who gave it
 }
 
 model ProfileActivity {

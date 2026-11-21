@@ -5,14 +5,15 @@ import { Alert, Card, Skeleton } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useAuth } from '@/app/auth';
-import { useProtectedImage, useWorkerProfile, ACTIVITY_LABEL, type WorkerProfile } from '@/lib/profile';
+import { useProtectedImage, useWorkerProfile, ACTIVITY_LABEL, LANGUAGE_LEVEL_LABEL, type WorkerProfile } from '@/lib/profile';
 import { EDU_LEVELS } from '@/pages/worker/sections';
+import { TYPE_LABEL } from '@/lib/format';
 import { MissingEssentials } from '@/components/MissingEssentials';
 
 type Template = 'classic' | 'compact';
 const SECTIONS = [
-  ['summary', 'Summary'], ['experience', 'Work experience'], ['education', 'Education'], ['skills', 'Skills'],
-  ['certifications', 'Certificates'], ['activities', 'Training and volunteering'], ['languages', 'Languages'],
+  ['objective', 'Career objective'], ['summary', 'Summary'], ['experience', 'Work experience'], ['education', 'Education'], ['skills', 'Skills'],
+  ['certifications', 'Certificates'], ['activities', 'Training and volunteering'], ['awards', 'Awards and achievements'], ['languages', 'Languages'], ['references', 'References'],
 ] as const;
 type SectionKey = (typeof SECTIONS)[number][0];
 
@@ -45,18 +46,24 @@ function Sheet({ profile, name, phone, email, show, template, showContact, photo
   template: Template; showContact: boolean; photo: string | null;
 }) {
   const place = profile.locationPath.map((p) => p.name).reverse().slice(0, 2).join(', ');
-  const contact = [showContact ? phone : null, showContact ? email : null, place || null].filter(Boolean);
+  const contact = [showContact ? phone : null, showContact ? email : null, [profile.addressLine, place].filter(Boolean).join(', ') || null, profile.website, profile.nationality ? `Nationality: ${profile.nationality}` : null].filter(Boolean);
+  const trainingActs = profile.activities.filter((a) => a.kind !== 'REFERENCE' && a.kind !== 'AWARD');
+  const awards = profile.activities.filter((a) => a.kind === 'AWARD');
+  const references = profile.activities.filter((a) => a.kind === 'REFERENCE');
   const skills = [...profile.skills].sort((a, b) => b.proficiency - a.proficiency);
   const experiences = [...profile.experiences].sort((a, b) => (b.startDate > a.startDate ? 1 : -1));
   const hasAny = (k: SectionKey) => {
     switch (k) {
+      case 'objective': return !!profile.objective;
       case 'summary': return !!profile.bio;
       case 'experience': return experiences.length > 0;
       case 'education': return profile.education.length > 0;
       case 'skills': return skills.length > 0;
       case 'certifications': return profile.certifications.length > 0;
-      case 'activities': return profile.activities.filter((a) => a.kind !== 'REFERENCE').length > 0;
+      case 'activities': return trainingActs.length > 0;
+      case 'awards': return awards.length > 0;
       case 'languages': return profile.languages.length > 0;
+      case 'references': return references.length > 0;
     }
   };
   const on = (k: SectionKey) => show[k] && hasAny(k);
@@ -72,6 +79,8 @@ function Sheet({ profile, name, phone, email, show, template, showContact, photo
         </div>
       </header>
 
+      {on('objective') && <Block title="Career objective" template={template}><p>{profile.objective}</p></Block>}
+
       {on('summary') && <Block title="Summary" template={template}><p>{profile.bio}</p></Block>}
 
       {on('experience') && (
@@ -82,7 +91,10 @@ function Sheet({ profile, name, phone, email, show, template, showContact, photo
                 <p className="font-semibold">{x.title}{x.employer ? `, ${x.employer}` : ''}</p>
                 <p className="text-slate-600">{period(x.startDate, x.endDate)}</p>
               </div>
+              {(x.location || x.employmentType) && <p className="text-slate-600">{[x.location, x.employmentType && (TYPE_LABEL[x.employmentType] ?? x.employmentType)].filter(Boolean).join(' · ')}</p>}
               {x.description && <p className="mt-0.5 whitespace-pre-line text-slate-700">{x.description}</p>}
+              {x.achievements && <p className="mt-0.5 text-slate-700"><span className="font-semibold">Achievements:</span> {x.achievements}</p>}
+              {x.reasonLeft && x.endDate && <p className="mt-0.5 text-slate-600">Reason for leaving: {x.reasonLeft}</p>}
             </div>
           ))}
         </Block>
@@ -129,7 +141,7 @@ function Sheet({ profile, name, phone, email, show, template, showContact, photo
 
       {on('activities') && (
         <Block title="Training and volunteering" template={template}>
-          {profile.activities.filter((a) => a.kind !== 'REFERENCE').map((a) => (
+          {trainingActs.map((a) => (
             <div key={a.id}>
               <div className="flex flex-wrap justify-between gap-x-4">
                 <p><span className="font-semibold">{a.title}</span>{a.organization ? ` – ${a.organization}` : ''} <span className="text-slate-500">({ACTIVITY_LABEL[a.kind].split(' (')[0]})</span></p>
@@ -141,7 +153,25 @@ function Sheet({ profile, name, phone, email, show, template, showContact, photo
         </Block>
       )}
 
-      {on('languages') && <Block title="Languages" template={template}><p>{profile.languages.join(', ')}</p></Block>}
+      {on('awards') && (
+        <Block title="Awards and achievements" template={template}>
+          {awards.map((a) => (
+            <div key={a.id} className="flex flex-wrap justify-between gap-x-4">
+              <p><span className="font-semibold">{a.title}</span>{a.organization ? ` – ${a.organization}` : ''}</p>
+              {a.endDate && <p className="text-slate-600">{a.endDate.slice(0, 4)}</p>}
+            </div>
+          ))}
+        </Block>
+      )}
+
+      {on('languages') && <Block title="Languages" template={template}><p>{profile.languages.map((l) => (profile.languageLevels[l] ? `${l} (${LANGUAGE_LEVEL_LABEL[profile.languageLevels[l]].toLowerCase()})` : l)).join(', ')}</p></Block>}
+
+      {on('references') && (
+        <Block title="References" template={template}>
+          {references.map((r) => <p key={r.id}><span className="font-semibold">{r.title}</span>{r.organization ? ` – ${r.organization}` : ''}</p>)}
+          <p className="text-slate-500">Contact details available on request.</p>
+        </Block>
+      )}
     </article>
   );
 }

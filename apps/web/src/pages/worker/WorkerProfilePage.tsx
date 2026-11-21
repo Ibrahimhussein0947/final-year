@@ -9,7 +9,7 @@ import { useWorkerProfile } from '@/lib/profile';
 import { CvImport } from '@/pages/worker/CvImport';
 import { SectorQuestions } from '@/pages/worker/SectorQuestions';
 import {
-  ActivitiesSection, BasicsForm, CertificationsSection, EducationSection, ExperienceSection, FilesSection,
+  ActivitiesSection, BasicsForm, CertificationsSection, CvDetailsForm, EducationSection, ExperienceSection, FilesSection,
   GpsCard, LocationPicker, PreferencesForm, SkillsSection,
 } from '@/pages/worker/sections';
 import { DocumentsSummary } from '@/components/DocumentsSummary';
@@ -67,6 +67,7 @@ export default function WorkerProfilePage() {
               <LinkButton to="/profile/views" variant="outline">See who viewed</LinkButton>
             </Card>
             <BasicsForm profile={q.data} />
+            <CvDetailsForm profile={q.data} />
             <LocationPicker profile={q.data} />
             <SkillsSection profile={q.data} />
             <SectorQuestions profile={q.data} />

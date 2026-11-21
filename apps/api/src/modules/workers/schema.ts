@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EMPLOYMENT_TYPES } from '../jobs/classification';
 const WORK_MODES = ['ON_SITE', 'REMOTE', 'HYBRID'] as const;
+export const LANGUAGE_LEVELS = ['BASIC', 'GOOD', 'FLUENT'] as const;
 const AVAILABILITY = ['IMMEDIATELY', 'WITHIN_TWO_WEEKS', 'WITHIN_ONE_MONTH', 'FLEXIBLE', 'NOT_AVAILABLE'] as const;
 const EDUCATION_LEVELS = ['NONE', 'PRIMARY', 'SECONDARY', 'VOCATIONAL_CERTIFICATE', 'DIPLOMA', 'BACHELOR', 'MASTER', 'DOCTORATE'] as const;
 
@@ -35,6 +36,12 @@ export const profileUpdateSchema = z
     maxTravelKm: z.number().int().min(0).max(3000).nullable(),
     willingToRelocate: z.boolean(),
     languages: z.array(text(30).min(1)).max(10),
+    // Language name -> how well. Names not in `languages` are ignored by the screens.
+    languageLevels: z.record(text(30).min(1), z.enum(LANGUAGE_LEVELS)).refine((r) => Object.keys(r).length <= 10, 'At most 10 languages'),
+    objective: nullableText(600),
+    website: httpUrl.nullable(),
+    addressLine: nullableText(150),
+    nationality: nullableText(60),
     portfolioUrls: z.array(httpUrl).max(10),
     isVisible: z.boolean(),
   })
@@ -87,10 +94,14 @@ export const experienceSchema = z
     startDate: z.coerce.date(),
     endDate: z.coerce.date().nullable().optional(),
     description: nullableText(1500).optional(),
+    location: nullableText(120).optional(),
+    employmentType: z.enum(EMPLOYMENT_TYPES).nullable().optional(),
+    reasonLeft: nullableText(200).optional(),
+    achievements: nullableText(1000).optional(),
   })
   .refine((v) => !v.endDate || v.endDate >= v.startDate, { path: ['endDate'], message: 'End date must be after the start date' });
 
-export const ACTIVITY_KINDS = ['INTERNSHIP', 'VOLUNTEER', 'TRAINING', 'APPRENTICESHIP', 'REFERENCE'] as const;
+export const ACTIVITY_KINDS = ['INTERNSHIP', 'VOLUNTEER', 'TRAINING', 'APPRENTICESHIP', 'REFERENCE', 'AWARD'] as const;
 
 /**
  * Internships, volunteer service, training, apprenticeships (learning a trade from a master) and references.

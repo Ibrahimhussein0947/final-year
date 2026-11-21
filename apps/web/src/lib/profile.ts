@@ -21,6 +21,11 @@ export interface WorkerProfile {
   maxTravelKm: number | null;
   willingToRelocate: boolean;
   languages: string[];
+  languageLevels: Record<string, LanguageLevel>;
+  objective: string | null;
+  website: string | null;
+  addressLine: string | null;
+  nationality: string | null;
   portfolioUrls: string[];
   isVisible: boolean;
   profileViews: number;
@@ -32,17 +37,20 @@ export interface WorkerProfile {
   education: { id: string; level: string; field: string | null; institution: string | null; department: string | null; gpa: number | null; gpaScale: number | null; year: number | null; source: string; documentUrl: string | null }[];
   certifications: { id: string; name: string; issuer: string | null; year: number | null; source: string; documentUrl: string | null }[];
   activities: Activity[];
-  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null; source: 'SELF_REPORTED' | 'VERIFIED' }[];
+  experiences: { id: string; title: string; employer: string | null; startDate: string; endDate: string | null; description: string | null; location: string | null; employmentType: string | null; reasonLeft: string | null; achievements: string | null; source: 'SELF_REPORTED' | 'VERIFIED' }[];
   completion: { pct: number; items: { key: string; label: string; points: number; done: boolean }[] };
 }
 
-export type ActivityKind = 'INTERNSHIP' | 'VOLUNTEER' | 'TRAINING' | 'APPRENTICESHIP' | 'REFERENCE';
+export type LanguageLevel = 'BASIC' | 'GOOD' | 'FLUENT';
+export const LANGUAGE_LEVEL_LABEL: Record<LanguageLevel, string> = { BASIC: 'Basic', GOOD: 'Good', FLUENT: 'Fluent' };
+
+export type ActivityKind = 'INTERNSHIP' | 'VOLUNTEER' | 'TRAINING' | 'APPRENTICESHIP' | 'REFERENCE' | 'AWARD';
 export interface Activity {
   id: string; kind: ActivityKind; title: string; organization: string | null; startDate: string | null; endDate: string | null;
   hours: number | null; description: string | null; source: string; documentUrl: string | null;
 }
 export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
-  INTERNSHIP: 'Internship', VOLUNTEER: 'Voluntary service', TRAINING: 'Training course', APPRENTICESHIP: 'Apprenticeship (learned a trade)', REFERENCE: 'Reference (someone who can vouch for you)',
+  INTERNSHIP: 'Internship', VOLUNTEER: 'Voluntary service', TRAINING: 'Training course', APPRENTICESHIP: 'Apprenticeship (learned a trade)', REFERENCE: 'Reference (someone who can vouch for you)', AWARD: 'Award or achievement (a prize, recognition or certificate of merit)',
 };
 
 export interface Option { id: string; nameEn: string; nameAm?: string | null; nameOm?: string | null }

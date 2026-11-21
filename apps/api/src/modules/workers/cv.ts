@@ -17,18 +17,21 @@ export type CvData = {
   headline: string | null;
   contact: string[];
   summary: string | null;
-  experiences: { title: string; employer: string | null; period: string; description: string | null; verified: boolean }[];
+  objective: string | null;
+  experiences: { title: string; employer: string | null; period: string; description: string | null; extra: string; achievements: string | null; reasonLeft: string | null; verified: boolean }[];
   education: { title: string; detail: string; verified: boolean }[];
   skills: { name: string; years: number | null; verified: boolean }[];
   certifications: { name: string; detail: string; verified: boolean }[];
   languages: string[];
+  awards: { title: string; detail: string }[];
+  references: { name: string; relationship: string | null }[];
 };
 
 // Amharic and Afaan Oromoo headings are drafts that need native-speaker review, like the rest of the UI strings.
 const LABELS: Record<CvLang, Record<string, string>> = {
-  en: { summary: 'Summary', experience: 'Work experience', education: 'Education', skills: 'Skills', certifications: 'Certifications', languages: 'Languages', present: 'Present', verified: 'Verified', years: 'yrs' },
-  am: { summary: 'ማጠቃለያ', experience: 'የሥራ ልምድ', education: 'ትምህርት', skills: 'ክህሎቶች', certifications: 'ሰርተፊኬቶች', languages: 'ቋንቋዎች', present: 'አሁን', verified: 'የተረጋገጠ', years: 'ዓመት' },
-  om: { summary: 'Cuunfaa', experience: 'Muuxannoo hojii', education: 'Barnoota', skills: 'Dandeettiiwwan', certifications: 'Ragaalee', languages: 'Afaanota', present: 'Amma', verified: 'Mirkanaa’e', years: 'waggaa' },
+  en: { objective: 'Objective', awards: 'Awards and achievements', references: 'References', referencesNote: 'Contact details available on request.', achievements: 'Achievements', reasonLeft: 'Reason for leaving', nationality: 'Nationality', BASIC: 'basic', GOOD: 'good', FLUENT: 'fluent', summary: 'Summary', experience: 'Work experience', education: 'Education', skills: 'Skills', certifications: 'Certifications', languages: 'Languages', present: 'Present', verified: 'Verified', years: 'yrs' },
+  am: { objective: 'ዓላማ', awards: 'ሽልማቶችና ስኬቶች', references: 'ማጣቀሻዎች', referencesNote: 'የመገናኛ መረጃ በጠየቁ ጊዜ ይሰጣል።', achievements: 'ስኬቶች', reasonLeft: 'የለቀቁበት ምክንያት', nationality: 'ዜግነት', BASIC: 'መሠረታዊ', GOOD: 'ጥሩ', FLUENT: 'አቀላጣፊ', summary: 'ማጠቃለያ', experience: 'የሥራ ልምድ', education: 'ትምህርት', skills: 'ክህሎቶች', certifications: 'ሰርተፊኬቶች', languages: 'ቋንቋዎች', present: 'አሁን', verified: 'የተረጋገጠ', years: 'ዓመት' },
+  om: { objective: 'Kaayyoo', awards: 'Badhaasaa fi milkaa’inoota', references: 'Ragaalee namootaa', referencesNote: 'Odeeffannoon quunnamtii yoo gaafatame ni kennama.', achievements: 'Milkaa’inoota', reasonLeft: 'Sababa hojii gadhiisuu', nationality: 'Lammummaa', BASIC: 'bu’uuraa', GOOD: 'gaarii', FLUENT: 'mudaa hin qabne', summary: 'Cuunfaa', experience: 'Muuxannoo hojii', education: 'Barnoota', skills: 'Dandeettiiwwan', certifications: 'Ragaalee', languages: 'Afaanota', present: 'Amma', verified: 'Mirkanaa’e', years: 'waggaa' },
 };
 
 const LEVELS: Record<string, string> = {
@@ -38,6 +41,12 @@ const LEVELS: Record<string, string> = {
 const LEVELS_AM: Record<string, string> = {
   NONE: 'መደበኛ ትምህርት የለም', PRIMARY: 'አንደኛ ደረጃ', SECONDARY: 'ሁለተኛ ደረጃ', VOCATIONAL_CERTIFICATE: 'የሙያ ሰርተፊኬት',
   DIPLOMA: 'ዲፕሎማ', BACHELOR: 'የመጀመሪያ ዲግሪ', MASTER: 'ሁለተኛ ዲግሪ', DOCTORATE: 'ዶክትሬት',
+};
+
+const EMPLOYMENT_LABEL: Record<string, string> = {
+  FULL_TIME: 'Full-time', PART_TIME: 'Part-time', TEMPORARY: 'Temporary', CONTRACT: 'Contract', FREELANCE: 'Freelance',
+  INTERNSHIP: 'Internship', SEASONAL: 'Seasonal', DAILY: 'Daily work', PERMANENT: 'Permanent', CASUAL: 'Casual',
+  APPRENTICESHIP: 'Apprenticeship', VOLUNTEER: 'Volunteer', GIG: 'Gig', ON_CALL: 'On-call',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -55,6 +64,7 @@ export async function loadCvData(workerId: string, lang: CvLang): Promise<CvData
       education: { orderBy: { year: 'desc' } },
       certifications: { orderBy: { year: 'desc' } },
       experiences: { orderBy: { startDate: 'desc' }, include: { category: true } },
+      activities: { where: { kind: { in: ['AWARD', 'REFERENCE'] } }, orderBy: { endDate: 'desc' } },
     },
   });
   if (!p) throw notFound('Profile not found');
@@ -74,13 +84,17 @@ export async function loadCvData(workerId: string, lang: CvLang): Promise<CvData
     lang,
     name: p.user.fullName,
     headline: p.headline || p.occupation || (p.category ? pick(lang, p.category.nameEn, p.category.nameAm, p.category.nameOm) : null),
-    contact: [p.user.phone, p.user.email, place.slice(0, 3).join(', ')].filter((x): x is string => !!x),
+    contact: [p.user.phone, p.user.email, join([p.addressLine, place.slice(0, 3).join(', ')], ', '), p.website, p.nationality ? `${L.nationality}: ${p.nationality}` : null].filter((x): x is string => !!x),
+    objective: p.objective,
     summary: p.bio,
     experiences: p.experiences.map((e) => ({
       title: e.title,
       employer: e.employer,
       period: `${monthYear(e.startDate)} - ${e.endDate ? monthYear(e.endDate) : L.present}`,
       description: e.description,
+      extra: join([e.location, e.employmentType ? EMPLOYMENT_LABEL[e.employmentType] ?? e.employmentType : null]),
+      achievements: e.achievements,
+      reasonLeft: e.endDate ? e.reasonLeft : null, // a reason only makes sense for a job that ended
       verified: e.source === 'VERIFIED',
     })),
     education: p.education.map((e) => ({
@@ -90,7 +104,12 @@ export async function loadCvData(workerId: string, lang: CvLang): Promise<CvData
     })),
     skills: p.skills.map((s) => ({ name: pick(lang, s.skill.nameEn, s.skill.nameAm, s.skill.nameOm), years: s.years, verified: s.source === 'VERIFIED' })),
     certifications: p.certifications.map((c) => ({ name: c.name, detail: join([c.issuer, c.year]), verified: c.source === 'VERIFIED' })),
-    languages: p.languages,
+    languages: p.languages.map((name) => {
+      const level = (p.languageLevels as Record<string, string> | null)?.[name];
+      return level && L[level] ? `${name} (${L[level]})` : name;
+    }),
+    awards: p.activities.filter((a) => a.kind === 'AWARD').map((a) => ({ title: a.title, detail: join([a.organization, a.endDate ? a.endDate.getUTCFullYear() : null]) })),
+    references: p.activities.filter((a) => a.kind === 'REFERENCE').map((a) => ({ name: a.title, relationship: a.organization })),
   };
 }
 
@@ -211,6 +230,10 @@ export function renderCv(data: CvData): Promise<Buffer> {
     if (data.headline) write(data.headline, { size: 12, color: MUTED, gap: 0.1 });
     if (data.contact.length) write(data.contact.join('   |   '), { size: 9.5, color: MUTED });
 
+    if (data.objective) {
+      section(L.objective);
+      write(data.objective, { size: 10 });
+    }
     if (data.summary) {
       section(L.summary);
       write(data.summary, { size: 10 });
@@ -220,8 +243,11 @@ export function renderCv(data: CvData): Promise<Buffer> {
       for (const e of data.experiences) {
         if (doc.y > doc.page.height - 120) doc.addPage();
         write(join([e.title, e.employer], ' - ') + tag(e.verified), { size: 10.5, bold: true });
-        write(e.period, { size: 9, color: MUTED, gap: e.description ? 0.1 : 0.5 });
-        if (e.description) write(e.description, { size: 10, gap: 0.6 });
+        const more = !!(e.description || e.achievements || e.reasonLeft);
+        write(join([e.period, e.extra]), { size: 9, color: MUTED, gap: more ? 0.1 : 0.5 });
+        if (e.description) write(e.description, { size: 10, gap: e.achievements || e.reasonLeft ? 0.1 : 0.6 });
+        if (e.achievements) write(`${L.achievements}: ${e.achievements}`, { size: 10, gap: e.reasonLeft ? 0.1 : 0.6 });
+        if (e.reasonLeft) write(`${L.reasonLeft}: ${e.reasonLeft}`, { size: 9, color: MUTED, gap: 0.6 });
       }
     }
     if (data.education.length) {
@@ -246,6 +272,18 @@ export function renderCv(data: CvData): Promise<Buffer> {
     if (data.languages.length) {
       section(L.languages);
       write(data.languages.join('   •   '), { size: 10 });
+    }
+    if (data.awards.length) {
+      section(L.awards);
+      for (const a of data.awards) {
+        write(a.title, { size: 10.5, bold: true });
+        if (a.detail) write(a.detail, { size: 9.5, color: MUTED, gap: 0.4 });
+      }
+    }
+    if (data.references.length) {
+      section(L.references);
+      for (const r of data.references) write(join([r.name, r.relationship], ' - '), { size: 10 });
+      write(L.referencesNote, { size: 8.5, color: MUTED });
     }
     doc.end();
   });

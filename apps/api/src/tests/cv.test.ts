@@ -15,12 +15,15 @@ const base: CvData = {
   name: 'Abebe Kebede',
   headline: 'Automotive mechanic',
   contact: ['+251911223344', 'abebe@example.com', 'Adama, Oromia'],
+  objective: 'To lead a workshop team and train apprentices.',
   summary: 'Mechanic with six years of experience repairing light vehicles and trucks.',
-  experiences: [{ title: 'Senior mechanic', employer: 'Adama Motors', period: 'Jan 2019 - Present', description: 'Engine and brake repair for a busy garage.', verified: true }],
+  experiences: [{ title: 'Senior mechanic', employer: 'Adama Motors', period: 'Jan 2019 - Present', description: 'Engine and brake repair for a busy garage.', extra: 'Adama · Full-time', achievements: 'Cut average repair time by a third.', reasonLeft: null, verified: true }],
   education: [{ title: 'Diploma - Automotive technology', detail: 'Adama Polytechnic · 2018', verified: false }],
   skills: [{ name: 'Engine repair', years: 6, verified: true }, { name: 'Brake systems', years: null, verified: false }],
   certifications: [{ name: 'Safe workshop practice', detail: 'TVET · 2020', verified: false }],
-  languages: ['Amharic', 'Afaan Oromoo', 'English'],
+  languages: ['Amharic (fluent)', 'Afaan Oromoo', 'English (good)'],
+  awards: [{ title: 'Best apprentice of the year', detail: 'Adama Polytechnic · 2018' }],
+  references: [{ name: 'Ato Kebede Alemu', relationship: 'Former workshop manager' }],
 };
 
 describe('CV renderer', () => {
@@ -29,7 +32,7 @@ describe('CV renderer', () => {
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     const { text, pages } = await extractPdfText(pdf);
     expect(pages).toBe(1);
-    for (const s of ['Abebe Kebede', 'Automotive mechanic', '+251911223344', 'Adama Motors', 'Jan 2019 - Present', 'Engine repair', 'Safe workshop practice', 'Afaan Oromoo']) {
+    for (const s of ['Abebe Kebede', 'Automotive mechanic', '+251911223344', 'Adama Motors', 'Jan 2019 - Present', 'Engine repair', 'Safe workshop practice', 'Afaan Oromoo', 'To lead a workshop team', 'Adama · Full-time', 'Cut average repair time', 'English (good)', 'Best apprentice of the year', 'Ato Kebede Alemu', 'Former workshop manager', 'Contact details available on request']) {
       expect(text, s).toContain(s);
     }
     expect(text).toContain('[Verified]'); // the verified experience
@@ -50,12 +53,12 @@ describe('CV renderer', () => {
   });
 
   it('handles a long CV across pages and an almost empty one', async () => {
-    const many = Array.from({ length: 40 }, (_, i) => ({ title: `Role ${i}`, employer: `Employer ${i}`, period: 'Jan 2010 - Dec 2011', description: 'Did a variety of useful work. '.repeat(6), verified: false }));
+    const many = Array.from({ length: 40 }, (_, i) => ({ title: `Role ${i}`, employer: `Employer ${i}`, period: 'Jan 2010 - Dec 2011', description: 'Did a variety of useful work. '.repeat(6), extra: '', achievements: null, reasonLeft: null, verified: false }));
     const long = await extractPdfText(await renderCv({ ...base, experiences: many }));
     expect(long.pages).toBeGreaterThan(1);
     expect(long.text).toContain('Role 39');
 
-    const bare = await renderCv({ lang: 'en', name: 'Only Name', headline: null, contact: [], summary: null, experiences: [], education: [], skills: [], certifications: [], languages: [] });
+    const bare = await renderCv({ lang: 'en', name: 'Only Name', headline: null, contact: [], objective: null, summary: null, experiences: [], education: [], skills: [], certifications: [], languages: [], awards: [], references: [] });
     expect(bare.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
@@ -64,7 +67,7 @@ describe('CV renderer', () => {
     const pdfjs = (await import(/* @vite-ignore */ specifier)) as { getDocument: (o: object) => { promise: Promise<{ numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: { str: string; transform: number[]; width: number }[] }> }> }> } };
     const pdf = await renderCv({
       ...base, lang: 'am', name: 'አበበ ከበደ', headline: 'መካኒክ in Adama', summary: 'ስድስት ዓመት የሥራ ልምድ ያለው መካኒክ። '.repeat(8),
-      experiences: [], education: [], certifications: [], skills: [],
+      experiences: [], education: [], certifications: [], skills: [], awards: [], references: [], objective: null,
     });
     const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf), verbosity: 0 }).promise;
     const items = (await (await doc.getPage(1)).getTextContent()).items.filter((i) => i.str.trim());
@@ -158,6 +161,47 @@ describe('GET /workers/me/cv.pdf', () => {
     expect(am.status).toBe(200);
     expect((await extractPdfText(am.body as Buffer)).text).toContain('የሥራ ልምድ');
     expect((await request(app).get('/api/v1/workers/me/cv.pdf?lang=xx').set(auth(workerToken))).status).toBe(400);
+  });
+
+  it('stores the extra CV details, puts them on the PDF, and keeps address and nationality from employers', async () => {
+    const get = (url: string, token: string) => request(app).get(url).set(auth(token));
+    const patch = await request(app).patch('/api/v1/workers/me').set(auth(workerToken)).send({
+      objective: 'To grow into a workshop lead.', website: 'https://example.com/me', addressLine: 'Bole Sub City, House 12', nationality: 'Ethiopian',
+      languages: ['Amharic', 'English'], languageLevels: { Amharic: 'FLUENT', English: 'BASIC' },
+    });
+    expect(patch.status).toBe(200);
+    expect(patch.body.profile.languageLevels).toEqual({ Amharic: 'FLUENT', English: 'BASIC' });
+    const exp = await request(app).post('/api/v1/workers/me/experience').set(auth(workerToken)).send({
+      title: 'Apprentice welder', employer: 'Mekelle Metals', startDate: '2018-01-01', endDate: '2019-12-31',
+      location: 'Mekelle', employmentType: 'CONTRACT', reasonLeft: 'Contract ended', achievements: 'Built 40 gates without a rejected weld.',
+    });
+    expect(exp.status).toBe(201);
+    const award = await request(app).post('/api/v1/workers/me/activities').set(auth(workerToken)).send({ kind: 'AWARD', title: 'Best welder of the year', organization: 'TVET College', endDate: '2019-06-30' });
+    expect(award.status).toBe(201);
+    const ref = await request(app).post('/api/v1/workers/me/activities').set(auth(workerToken)).send({ kind: 'REFERENCE', title: 'Ato Dawit Hailu', organization: 'Former supervisor' });
+    expect(ref.status).toBe(201);
+
+    const parse = (r: any, cb: any) => { const c: Buffer[] = []; r.on('data', (d: Buffer) => c.push(d)); r.on('end', () => cb(null, Buffer.concat(c))); };
+    const pdf = await get('/api/v1/workers/me/cv.pdf', workerToken).buffer(true).parse(parse);
+    const { text } = await extractPdfText(pdf.body as Buffer);
+    for (const t of ['To grow into a workshop lead', 'Bole Sub City', 'https://example.com/me', 'Ethiopian', 'Amharic (fluent)', 'English (basic)', 'Mekelle', 'Contract', 'Built 40 gates', 'Contract ended', 'Best welder of the year', 'Ato Dawit Hailu', 'Former supervisor']) {
+      expect(text, t).toContain(t);
+    }
+
+    const pub = await get(`/api/v1/workers/${workerId}`, employerToken);
+    expect(pub.status).toBe(200);
+    expect(pub.body.profile.objective).toBe('To grow into a workshop lead.');
+    expect(pub.body.profile.languageLevels.Amharic).toBe('FLUENT');
+    expect(pub.body.profile.experiences.find((e: { title: string }) => e.title === 'Apprentice welder')).toMatchObject({ location: 'Mekelle', employmentType: 'CONTRACT' });
+    expect(JSON.stringify(pub.body)).not.toContain('Bole Sub City');
+    expect(JSON.stringify(pub.body)).not.toContain('"nationality"');
+  });
+
+  it('rejects unsafe links and unknown language levels', async () => {
+    const bad = (body: object) => request(app).patch('/api/v1/workers/me').set(auth(workerToken)).send(body);
+    expect((await bad({ website: 'javascript:alert(1)' })).status).toBe(400);
+    expect((await bad({ languageLevels: { Amharic: 'NATIVE' } })).status).toBe(400);
+    expect((await bad({ website: null, objective: null })).status).toBe(200);
   });
 
   it('is only for signed-in workers', async () => {
