@@ -1,0 +1,322 @@
+[
+  {
+    "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "dim": 384,
+    "prefix": "",
+    "load_seconds": 4.3,
+    "sets": {
+      "English": {
+        "auc": 0.983,
+        "auc_ci": [
+          0.957,
+          0.999
+        ],
+        "top1": 0.875,
+        "mrr": 0.922,
+        "mean_same": 0.693,
+        "mean_diff": 0.194
+      },
+      "Amharic": {
+        "auc": 0.772,
+        "auc_ci": [
+          0.616,
+          0.888
+        ],
+        "top1": 0.25,
+        "mrr": 0.458,
+        "mean_same": 0.691,
+        "mean_diff": 0.585
+      },
+      "Afaan Oromo": {
+        "auc": 0.755,
+        "auc_ci": [
+          0.62,
+          0.878
+        ],
+        "top1": 0.375,
+        "mrr": 0.512,
+        "mean_same": 0.729,
+        "mean_diff": 0.56
+      },
+      "English -> Amharic": {
+        "auc": 0.827,
+        "auc_ci": [
+          0.696,
+          0.928
+        ],
+        "top1": 0.562,
+        "mrr": 0.674,
+        "mean_same": 0.428,
+        "mean_diff": 0.251
+      },
+      "English -> Afaan Oromo": {
+        "auc": 0.571,
+        "auc_ci": [
+          0.438,
+          0.698
+        ],
+        "top1": 0.188,
+        "mrr": 0.295,
+        "mean_same": 0.234,
+        "mean_diff": 0.203
+      }
+    },
+    "ms_per_text": 60.5
+  },
+  {
+    "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    "dim": 768,
+    "prefix": "",
+    "load_seconds": 9.3,
+    "sets": {
+      "English": {
+        "auc": 0.998,
+        "auc_ci": [
+          0.995,
+          1.0
+        ],
+        "top1": 1.0,
+        "mrr": 1.0,
+        "mean_same": 0.769,
+        "mean_diff": 0.241
+      },
+      "Amharic": {
+        "auc": 0.684,
+        "auc_ci": [
+          0.558,
+          0.806
+        ],
+        "top1": 0.188,
+        "mrr": 0.363,
+        "mean_same": 0.622,
+        "mean_diff": 0.528
+      },
+      "Afaan Oromo": {
+        "auc": 0.772,
+        "auc_ci": [
+          0.649,
+          0.882
+        ],
+        "top1": 0.562,
+        "mrr": 0.641,
+        "mean_same": 0.739,
+        "mean_diff": 0.573
+      },
+      "English -> Amharic": {
+        "auc": 0.842,
+        "auc_ci": [
+          0.701,
+          0.949
+        ],
+        "top1": 0.625,
+        "mrr": 0.707,
+        "mean_same": 0.496,
+        "mean_diff": 0.263
+      },
+      "English -> Afaan Oromo": {
+        "auc": 0.485,
+        "auc_ci": [
+          0.348,
+          0.627
+        ],
+        "top1": 0.188,
+        "mrr": 0.274,
+        "mean_same": 0.183,
+        "mean_diff": 0.175
+      }
+    },
+    "ms_per_text": 81.0
+  },
+  {
+    "model": "intfloat/multilingual-e5-small",
+    "dim": 384,
+    "prefix": "query: ",
+    "load_seconds": 13.9,
+    "sets": {
+      "English": {
+        "auc": 0.936,
+        "auc_ci": [
+          0.877,
+          0.995
+        ],
+        "top1": 0.875,
+        "mrr": 0.938,
+        "mean_same": 0.881,
+        "mean_diff": 0.812
+      },
+      "Amharic": {
+        "auc": 0.718,
+        "auc_ci": [
+          0.585,
+          0.867
+        ],
+        "top1": 0.438,
+        "mrr": 0.545,
+        "mean_same": 0.906,
+        "mean_diff": 0.879
+      },
+      "Afaan Oromo": {
+        "auc": 0.802,
+        "auc_ci": [
+          0.731,
+          0.916
+        ],
+        "top1": 0.875,
+        "mrr": 0.914,
+        "mean_same": 0.931,
+        "mean_diff": 0.877
+      },
+      "English -> Amharic": {
+        "auc": 0.898,
+        "auc_ci": [
+          0.837,
+          0.964
+        ],
+        "top1": 0.688,
+        "mrr": 0.823,
+        "mean_same": 0.838,
+        "mean_diff": 0.802
+      },
+      "English -> Afaan Oromo": {
+        "auc": 0.731,
+        "auc_ci": [
+          0.602,
+          0.859
+        ],
+        "top1": 0.375,
+        "mrr": 0.536,
+        "mean_same": 0.818,
+        "mean_diff": 0.799
+      }
+    },
+    "ms_per_text": 68.5
+  },
+  {
+    "model": "sentence-transformers/LaBSE",
+    "dim": 768,
+    "prefix": "",
+    "load_seconds": 1396.1,
+    "sets": {
+      "English": {
+        "auc": 0.995,
+        "auc_ci": [
+          0.989,
+          1.0
+        ],
+        "top1": 0.938,
+        "mrr": 0.969,
+        "mean_same": 0.673,
+        "mean_diff": 0.287
+      },
+      "Amharic": {
+        "auc": 0.931,
+        "auc_ci": [
+          0.834,
+          0.988
+        ],
+        "top1": 0.625,
+        "mrr": 0.752,
+        "mean_same": 0.63,
+        "mean_diff": 0.309
+      },
+      "Afaan Oromo": {
+        "auc": 0.915,
+        "auc_ci": [
+          0.833,
+          0.978
+        ],
+        "top1": 0.812,
+        "mrr": 0.859,
+        "mean_same": 0.57,
+        "mean_diff": 0.206
+      },
+      "English -> Amharic": {
+        "auc": 0.964,
+        "auc_ci": [
+          0.93,
+          0.997
+        ],
+        "top1": 0.875,
+        "mrr": 0.919,
+        "mean_same": 0.63,
+        "mean_diff": 0.265
+      },
+      "English -> Afaan Oromo": {
+        "auc": 0.571,
+        "auc_ci": [
+          0.382,
+          0.74
+        ],
+        "top1": 0.25,
+        "mrr": 0.361,
+        "mean_same": 0.135,
+        "mean_diff": 0.078
+      }
+    },
+    "ms_per_text": 153.9
+  },
+  {
+    "model": "intfloat/multilingual-e5-base",
+    "dim": 768,
+    "prefix": "query: ",
+    "load_seconds": 116.7,
+    "sets": {
+      "English": {
+        "auc": 0.923,
+        "auc_ci": [
+          0.862,
+          0.985
+        ],
+        "top1": 0.875,
+        "mrr": 0.927,
+        "mean_same": 0.881,
+        "mean_diff": 0.804
+      },
+      "Amharic": {
+        "auc": 0.716,
+        "auc_ci": [
+          0.59,
+          0.851
+        ],
+        "top1": 0.5,
+        "mrr": 0.602,
+        "mean_same": 0.927,
+        "mean_diff": 0.908
+      },
+      "Afaan Oromo": {
+        "auc": 0.786,
+        "auc_ci": [
+          0.69,
+          0.911
+        ],
+        "top1": 0.625,
+        "mrr": 0.744,
+        "mean_same": 0.93,
+        "mean_diff": 0.889
+      },
+      "English -> Amharic": {
+        "auc": 0.846,
+        "auc_ci": [
+          0.701,
+          0.964
+        ],
+        "top1": 0.688,
+        "mrr": 0.782,
+        "mean_same": 0.803,
+        "mean_diff": 0.771
+      },
+      "English -> Afaan Oromo": {
+        "auc": 0.749,
+        "auc_ci": [
+          0.634,
+          0.875
+        ],
+        "top1": 0.438,
+        "mrr": 0.566,
+        "mean_same": 0.788,
+        "mean_diff": 0.772
+      }
+    },
+    "ms_per_text": 135.9
+  }
+]

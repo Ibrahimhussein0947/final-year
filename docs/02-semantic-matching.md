@@ -27,7 +27,10 @@ The same 16-occupation probe (`evaluation/multilingual_probe.py`, run per model 
 | paraphrase-multilingual-MiniLM-L12 (384), **current** | 0.983 / 0.875 | 0.77 / 0.25 | 0.76 / 0.375 | |
 | multilingual-e5-small (384) | 0.936 / 0.875 | 0.72 / 0.44 | 0.80 / 0.875 | all cosines squeezed into 0.80 to 0.93 (same 0.88-0.93, different 0.81-0.88), so the current calibration bounds (0.25 to 0.70) would have to be redone |
 | paraphrase-multilingual-mpnet-base-v2 (768) | 0.998 / 1.0 | 0.68 / 0.19 | 0.77 / 0.56 | larger, slower, needs re-embedding everything |
-| LaBSE (768) | not measured | not measured | not measured | the model download failed twice (network), so it is untested |
+| LaBSE (768) | 0.995 / 0.94 | 0.93 / 0.62 | 0.92 / 0.81 | the strongest on Amharic and Afaan Oromoo in the probe, but about 2.5x slower per text (154 ms vs 60 ms); English to Afaan Oromoo is still weak (0.57) |
+| multilingual-e5-base (768) | 0.923 / 0.88 | 0.72 / 0.50 | 0.79 / 0.62 | no better than e5-small |
+
+**Update (`evaluation/compare_models.py`, with bootstrap 95% intervals, `reports/model_comparison.md`):** LaBSE was measured at last. Its Amharic AUC is 0.93 [0.83-0.99] against 0.77 [0.62-0.89] for the current model, and its Afaan Oromoo AUC is 0.92 [0.83-0.98] against 0.76 [0.62-0.88]. The Amharic intervals barely overlap, so LaBSE is the best candidate, but the probe has only 16 non-native-reviewed phrases, so this is a shortlist result, not proof. Switching would mean re-embedding all data and redoing the score calibration, and the hybrid ranking has not been re-evaluated with it. **Not switched yet.**
 
 **Reading it honestly:** no tested model separates Amharic occupations reliably (AUC 0.68 to 0.77 for all three, top-1 at most 0.44). Afaan Oromoo moves around (E5 top-1 0.875, MPNet 0.56, current 0.375) but with 16 phrases written without a native speaker a difference of a few phrases is noise, and E5 pays for it with worse English and a squeezed score range. **So the model was not changed**: there is no measured gain worth a re-embedding, a recalibration and a slower service. `AI_TEXT_PREFIX` support was added so a model that needs a prefix can be evaluated or adopted without code changes.
 
