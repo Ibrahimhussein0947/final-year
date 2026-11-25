@@ -77,7 +77,7 @@ describe('taxonomy', () => {
 describe('worker profile', () => {
   it('computes completion transparently as the profile fills in', async () => {
     const { token } = await signUp('WORKER');
-    let me = await request(app).get('/api/v1/workers/me').set(auth(token));
+    const me = await request(app).get('/api/v1/workers/me').set(auth(token));
     expect(me.body.profile.completion.pct).toBe(10); // location from registration
 
     const patch = await request(app).patch('/api/v1/workers/me').set(auth(token)).send({

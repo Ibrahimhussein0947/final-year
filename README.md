@@ -4,7 +4,52 @@
 
 AI-based job matching and recommendation platform for the Ethiopian labor market.
 
+[![CI](https://github.com/Ibrahimhussein0947/final-year/actions/workflows/ci.yml/badge.svg)](https://github.com/Ibrahimhussein0947/final-year/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-%3E%3D20-339933)
+![TypeScript](https://img.shields.io/badge/TypeScript-React%20%2B%20Express-3178c6)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
+## Features
+- **Workers:** profile and CV builder, CV reading, job search, explainable match scores, applications, messaging, Telegram alerts, verification of skills.
+- **Employers:** job posts with requirement suggestions, applicant ranking and comparison, worker search and invitations, interviews, hiring rules by organization type.
+- **Admins:** user and organization management, verification, moderation, matching weights, announcements, analytics, audit log, settings and health.
+- **Platform:** English, Amharic and Afaan Oromoo interface (partial), installable PWA, Android app (Capacitor), optional semantic matching service.
+
+## Tech stack
+| Part | Technology |
+| --- | --- |
+| Web (`apps/web`) | React, TypeScript, Vite, PWA |
+| API (`apps/api`) | Node 20+, Express, TypeScript, Prisma, Socket.IO, Vitest |
+| Database | PostgreSQL 16 with pgvector |
+| AI service (`apps/ai`) | Python, FastAPI, multilingual sentence embeddings |
+| Mobile (`apps/mobile`) | Capacitor (Android) |
+| Infra (`infra`) | Docker Compose, Nginx, GitHub Actions |
+
+## Quick start
+```bash
+npm install
+npm run db:up        # database (see "Run the database and seed it" below for .env setup)
+npm run dev:api      # http://localhost:4100
+npm run dev:web      # http://localhost:5173
+```
+
+## Useful commands
+| Command | What it does |
+| --- | --- |
+| `npm run typecheck` | TypeScript check for all workspaces |
+| `npm test` | API and web tests |
+| `npm run lint` | ESLint (errors fail CI; warnings are fixed gradually) |
+| `npm run format` | Prettier |
+| `npm run build` | Production builds |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and commit style.
+
+## Documentation
 - Plan and architecture: [docs/00-ARCHITECTURE-AND-PLAN.md](docs/00-ARCHITECTURE-AND-PLAN.md)
+- Technical overview: [docs/09-technical-overview.md](docs/09-technical-overview.md)
+- API reference: [docs/api-reference.md](docs/api-reference.md)
+- Deployment: [docs/07-deployment.md](docs/07-deployment.md)
+- User guide: [docs/08-user-guide.md](docs/08-user-guide.md)
 
 ## Status
 Phases 1 to 8 and 10 to 17 done, Phase 9 done for English only: scaffold, database, public website, authentication, profiles with secure uploads, job posting and search, the recruitment workflow, a rule-based explainable matching engine, and the semantic-matching integration (real model installed and measured: **works for English, unreliable for Amharic and Afaan Oromoo**, no ranking gain shown yet, see docs/02-semantic-matching.md).
