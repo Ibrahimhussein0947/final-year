@@ -22,7 +22,7 @@ const phone = z
   .transform((v) => v.replace(/[\s\-().]/g, ''))
   .pipe(z.string().regex(/^(\+251|251|0)?[79]\d{8}$/, 'Enter a valid Ethiopian mobile number, e.g. 0911 234 567'));
 
-const loginSchema = z.object({ phone, password: z.string().min(1, 'Enter your password') });
+const loginSchema = z.object({ phone: z.string().trim().min(3, 'Enter your phone number or email'), password: z.string().min(1, 'Enter your password') });
 
 const registerSchema = z
   .object({
@@ -116,7 +116,7 @@ export function LoginPage() {
   return (
     <AuthShell title={t('auth.login.title')} subtitle={t('auth.login.subtitle')}>
       <form noValidate onSubmit={onSubmit} className="space-y-4">
-        <TextField label={t('auth.phone')} type="tel" autoComplete="tel" error={errors.phone?.message} {...register('phone')} />
+        <TextField label="Phone number or email" type="text" autoComplete="username" error={errors.phone?.message} {...register('phone')} />
         <TextField label={t('auth.password')} type="password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
         {needCode && (
           <TextField label="Authenticator code" autoComplete="one-time-code" maxLength={11} autoFocus value={totp} onChange={(e) => setTotp(e.target.value)} hint="Enter the 6-digit code from your authenticator app. Lost your phone? Use one of your backup codes instead." />

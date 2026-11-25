@@ -53,8 +53,25 @@ export const registerSchema = z
     }
   });
 
+/** Sign-in name: an Ethiopian mobile number or an email address. Phones are normalised, emails lower-cased. */
+const loginName = z
+  .string()
+  .trim()
+  .min(3, 'Enter your phone number or email')
+  .max(254)
+  .transform((v, ctx) => {
+    if (v.includes('@')) {
+      const email = z.string().email().safeParse(v.toLowerCase());
+      if (!email.success) { ctx.addIssue({ code: 'custom', message: 'Enter a valid email address' }); return z.NEVER; }
+      return email.data;
+    }
+    const digits = stripPhoneFormatting(v);
+    if (!PHONE_REGEX.test(digits)) { ctx.addIssue({ code: 'custom', message: 'Enter a valid Ethiopian mobile number or an email address' }); return z.NEVER; }
+    return normalizePhone(digits);
+  });
+
 export const loginSchema = z.object({
-  phone,
+  phone: loginName,
   password: z.string().min(1).max(200),
   totpCode: z.string().trim().regex(/^(\d{6}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$/, 'Enter the 6-digit code or a backup code').optional(),
 });

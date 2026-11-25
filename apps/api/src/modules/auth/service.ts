@@ -110,11 +110,11 @@ export async function register(input: RegisterInput, req: Request) {
 }
 
 export async function login(input: LoginInput, req: Request) {
-  const user = await prisma.user.findUnique({ where: { phone: input.phone } });
+  const user = await prisma.user.findUnique({ where: input.phone.includes('@') ? { email: input.phone } : { phone: input.phone } });
   const ok = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) {
     await audit(req, user?.id ?? null, 'auth.login_failed', 'User', user?.id);
-    throw unauthorized('Incorrect phone number or password');
+    throw unauthorized('Incorrect phone number, email or password');
   }
   if (user.status !== 'ACTIVE') {
     await audit(req, user.id, 'auth.login_blocked', 'User', user.id, { status: user.status });
