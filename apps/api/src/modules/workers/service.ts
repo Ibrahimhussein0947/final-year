@@ -153,7 +153,8 @@ export async function updateProfile(workerId: string, data: Prisma.WorkerProfile
     const cat = await prisma.category.findUnique({ where: { id: data.categoryId as string }, select: { id: true } });
     if (!cat) throw badRequest('Unknown category', { categoryId: ['Choose a valid category'] });
   }
-  await prisma.workerProfile.update({ where: { id: workerId }, data });
+  // Choosing an availability by hand replaces the one a hire set, so nothing is restored over it later.
+  await prisma.workerProfile.update({ where: { id: workerId }, data: data.availability !== undefined ? { ...data, availabilityBeforeHire: null } : data });
   await recomputeCompletion(workerId);
 }
 

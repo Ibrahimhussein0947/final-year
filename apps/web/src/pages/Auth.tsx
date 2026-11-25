@@ -119,7 +119,7 @@ export function LoginPage() {
         <TextField label={t('auth.phone')} type="tel" autoComplete="tel" error={errors.phone?.message} {...register('phone')} />
         <TextField label={t('auth.password')} type="password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
         {needCode && (
-          <TextField label="Authenticator code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus value={totp} onChange={(e) => setTotp(e.target.value)} hint="Open your authenticator app and enter the 6-digit code." />
+          <TextField label="Authenticator code" autoComplete="one-time-code" maxLength={11} autoFocus value={totp} onChange={(e) => setTotp(e.target.value)} hint="Enter the 6-digit code from your authenticator app. Lost your phone? Use one of your backup codes instead." />
         )}
         {notice && !formError && <Alert tone="success">{notice}</Alert>}
         {formError && <Alert tone="danger">{formError}</Alert>}

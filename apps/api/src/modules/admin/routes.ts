@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { audit } from '../../lib/audit';
 import { PHONE_REGEX, normalizePhone, stripPhoneFormatting } from '../../lib/security';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { aiClient } from '../../integrations/aiClient';
 import { notifier } from '../../integrations/notify';
 import { requireAuth, requireRole } from '../../middleware/auth';
@@ -41,9 +41,25 @@ export function csvCell(v: unknown): string {
 }
 const csv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 
+/**
+ * Administrator levels. FULL may do everything. AUDITOR may only read. MODERATOR may read and act on reports,
+ * job reviews and verifications, but cannot read the data exports or the administrator list.
+ */
+const MODERATOR_WRITE = ['/moderation', '/verifications', '/jobs'];
+const MODERATOR_NO_READ = ['/export', '/admins'];
+async function enforceAdminLevel(req: Request, _res: unknown, next: () => void) {
+  const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { adminLevel: true } });
+  const level = u?.adminLevel ?? 'FULL';
+  const read = req.method === 'GET' || req.method === 'HEAD';
+  const under = (prefixes: string[]) => prefixes.some((p) => req.path === p || req.path.startsWith(`${p}/`));
+  if (level === 'AUDITOR' && !read) throw forbidden('Your administrator level is read only');
+  if (level === 'MODERATOR' && (read ? under(MODERATOR_NO_READ) : !under(MODERATOR_WRITE))) throw forbidden('Your administrator level does not include this');
+  next();
+}
+
 export function adminRouter() {
   const router = Router();
-  router.use(requireAuth, requireRole('ADMIN'));
+  router.use(requireAuth, requireRole('ADMIN'), enforceAdminLevel);
   router.use(adminManageRouter());
 
   router.get('/stats', async (_req, res) => {
@@ -85,6 +101,11 @@ export function adminRouter() {
   router.get('/admins', async (_req, res) => {
     res.json({ items: await svc.listAdmins() });
   });
+  router.patch('/admins/:id/level', validateBody(z.object({ level: z.enum(['FULL', 'MODERATOR', 'AUDITOR']), actorPassword: adminPassword }).strict()), async (req, res) => {
+    const out = await svc.setAdminLevel(req.user!.id, idOf(req), req.body.level, req.body.actorPassword);
+    await audit(req, req.user!.id, 'admin.admin_level_changed', 'User', out.id, { level: out.level });
+    res.json(out);
+  });
   router.post(
     '/admins',
     validateBody(z.object({
@@ -92,6 +113,7 @@ export function adminRouter() {
       phone: z.string().trim().transform(stripPhoneFormatting).pipe(z.string().regex(PHONE_REGEX, 'Enter a valid Ethiopian phone number')).transform(normalizePhone),
       password: z.string().min(10, 'Use at least 10 characters').max(72).regex(/[A-Za-z]/, 'Include a letter').regex(/\d/, 'Include a number'),
       actorPassword: adminPassword,
+      level: z.enum(['FULL', 'MODERATOR', 'AUDITOR']).default('FULL'),
     }).strict()),
     async (req, res) => {
       const created = await svc.createAdmin(req.user!.id, req.body);

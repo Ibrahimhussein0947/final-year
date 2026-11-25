@@ -59,6 +59,7 @@ function TwoFactor() {
   const { user, reload } = useAuth();
   const [setup, setSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
   const [code, setCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,8 @@ function TwoFactor() {
   const start = () => run(async () => setSetup(await api('/auth/2fa/setup', { method: 'POST' })));
   const enable = () =>
     run(async () => {
-      await api('/auth/2fa/enable', { method: 'POST', body: { code } });
+      const r = await api<{ backupCodes?: string[] }>('/auth/2fa/enable', { method: 'POST', body: { code } });
+      setBackupCodes(r.backupCodes ?? null);
       setSetup(null);
       setCode('');
       await reload();
@@ -100,6 +102,19 @@ function TwoFactor() {
       {user?.twoFactorEnabled ? (
         <div className="mt-4 space-y-4">
           <Alert tone="success">Two-factor login is on.</Alert>
+          {backupCodes && (
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <h3 className="font-semibold">Your backup codes</h3>
+              <p className="text-sm text-muted">Save these now. They are shown only once. If you lose your phone, each code lets you log in one time in place of the 6-digit code.</p>
+              <ul className="grid grid-cols-2 gap-2 font-mono text-base font-semibold tracking-wider">
+                {backupCodes.map((c) => <li key={c} className="rounded-lg bg-surface-2 px-3 py-2">{c}</li>)}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => void navigator.clipboard?.writeText(backupCodes.join('\n'))}>Copy codes</Button>
+                <Button size="sm" variant="accent" onClick={() => setBackupCodes(null)}>I have saved them</Button>
+              </div>
+            </div>
+          )}
           <TextField label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <TextField label="Authenticator code" inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} hint="Use a fresh code to turn it off." />
           {error && <Alert tone="danger">{error}</Alert>}

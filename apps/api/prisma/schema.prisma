@@ -20,6 +20,13 @@ enum Role {
   TRAINER
 }
 
+// How much an administrator may do. FULL = everything; MODERATOR = reports, job reviews, verifications; AUDITOR = read only.
+enum AdminLevel {
+  FULL
+  MODERATOR
+  AUDITOR
+}
+
 enum AccountStatus {
   ACTIVE
   SUSPENDED
@@ -285,6 +292,8 @@ model User {
   totpSecret         String? // authenticator-app secret (administrators)
   totpEnabledAt      DateTime? // null until the first code is confirmed
   totpLastStep       Int? // last accepted time step, so a code cannot be reused
+  totpBackupCodes    String[] @default([]) // SHA-256 of unused one-time backup codes
+  adminLevel         AdminLevel @default(FULL)
   // Notification preferences (workers can opt out of job-match alerts; SMS is opt-in and needs a verified phone)
   notifyJobMatches   Boolean       @default(true)
   autoApply          Boolean       @default(false) // opt-in: apply by itself to jobs that match well
@@ -456,6 +465,7 @@ model WorkerProfile {
   preferredTypes     EmploymentType[]
   preferredWorkModes WorkMode[]
   availability       AvailabilityStatus @default(FLEXIBLE)
+  availabilityBeforeHire AvailabilityStatus? // set while a hire has made the worker unavailable, so it can be restored
   availableFrom      DateTime?
   locationId         String?
   lat                Float? // private: never returned to other users at full precision

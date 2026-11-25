@@ -429,7 +429,7 @@ export async function listAdmins() {
   const rows = await prisma.user.findMany({
     where: { role: 'ADMIN', status: { not: 'DELETED' } },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, fullName: true, phone: true, status: true, createdAt: true, lastLoginAt: true },
+    select: { id: true, fullName: true, phone: true, status: true, adminLevel: true, createdAt: true, lastLoginAt: true },
   });
   return rows;
 }
@@ -440,16 +440,26 @@ async function confirmAdminPassword(adminId: string, password: string) {
   if (!me || !(await bcrypt.compare(password, me.passwordHash))) throw forbidden('Your password is not correct');
 }
 
-export async function createAdmin(actorId: string, input: { fullName: string; phone: string; password: string; actorPassword: string }) {
+export async function createAdmin(actorId: string, input: { fullName: string; phone: string; password: string; actorPassword: string; level?: 'FULL' | 'MODERATOR' | 'AUDITOR' }) {
   await confirmAdminPassword(actorId, input.actorPassword);
   const existing = await prisma.user.findUnique({ where: { phone: input.phone }, select: { id: true } });
   if (existing) throw conflict('An account with this phone number already exists. Administrators are created from a new number.');
   const passwordHash = await bcrypt.hash(input.password, env.BCRYPT_ROUNDS);
   const user = await prisma.user.create({
-    data: { fullName: input.fullName, phone: input.phone, passwordHash, role: 'ADMIN', phoneVerifiedAt: new Date(), mustChangePassword: true },
-    select: { id: true, fullName: true, phone: true, status: true, createdAt: true, lastLoginAt: true },
+    data: { fullName: input.fullName, phone: input.phone, passwordHash, role: 'ADMIN', adminLevel: input.level ?? 'FULL', phoneVerifiedAt: new Date(), mustChangePassword: true },
+    select: { id: true, fullName: true, phone: true, status: true, adminLevel: true, createdAt: true, lastLoginAt: true },
   });
   return user;
+}
+
+/** Change another administrator's level. Not your own, so a full administrator always remains. */
+export async function setAdminLevel(actorId: string, adminId: string, level: 'FULL' | 'MODERATOR' | 'AUDITOR', actorPassword: string) {
+  if (actorId === adminId) throw forbidden('You cannot change your own administrator level');
+  await confirmAdminPassword(actorId, actorPassword);
+  const target = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true, role: true, status: true } });
+  if (!target || target.role !== 'ADMIN' || target.status === 'DELETED') throw notFound('Administrator not found');
+  await prisma.user.update({ where: { id: adminId }, data: { adminLevel: level } });
+  return { id: adminId, level };
 }
 
 /**

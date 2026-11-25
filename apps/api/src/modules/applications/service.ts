@@ -1,3 +1,4 @@
+import { markHired } from '../hiring/availability';
 import { assertWorkerDocuments } from '../documents/status';
 import { assertCvAgreesWithProfile } from '../verification/service';
 import { assertDecisionAllowed, getPolicy, rulesView } from '../hiring/service';
@@ -317,7 +318,11 @@ export async function changeStatus(userId: string, applicationId: string, to: Ap
       : []),
   ]);
   if (to === 'SHORTLISTED') await recordFeedback(app.job.id, app.worker.id, 'SHORTLISTED');
-  if (to === 'ACCEPTED') await recordFeedback(app.job.id, app.worker.id, 'HIRED');
+  if (to === 'ACCEPTED') {
+    await recordFeedback(app.job.id, app.worker.id, 'HIRED');
+    // A hired worker is no longer offered to other employers or alerted about other jobs.
+    await markHired(app.worker.id).catch((err) => logger.warn({ err: String(err), applicationId: app.id }, 'could not mark hired worker unavailable'));
+  }
   let reasons: string[] = [];
   let otherMatches = 0;
   if (to === 'REJECTED') {

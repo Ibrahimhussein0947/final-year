@@ -335,6 +335,7 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | GET | `/admin/users` | signed in, admin only |
 | PATCH | `/admin/users/:id/status` | signed in, admin only |
 | GET | `/admin/admins` | signed in, admin only |
+| PATCH | `/admin/admins/:id/level` | signed in, admin only |
 | POST | `/admin/admins` | signed in, admin only |
 | PATCH | `/admin/admins/:id/status` | signed in, admin only |
 | GET | `/admin/plans` | signed in, admin only |
@@ -403,4 +404,4 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | POST | `/telegram/webhook` | public |
 
-Total: 242 routes.
+Total: 243 routes.

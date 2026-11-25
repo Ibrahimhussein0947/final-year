@@ -56,7 +56,7 @@ export const registerSchema = z
 export const loginSchema = z.object({
   phone,
   password: z.string().min(1).max(200),
-  totpCode: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code').optional(),
+  totpCode: z.string().trim().regex(/^(\d{6}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$/, 'Enter the 6-digit code or a backup code').optional(),
 });
 
 export const otpRequestSchema = z.object({ kind: z.enum(['PHONE', 'EMAIL']) });

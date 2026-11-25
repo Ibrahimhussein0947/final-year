@@ -88,7 +88,8 @@ export function authRouter(opts: { rateLimitMax?: number } = {}) {
     res.json(await svc.startTwoFactorSetup(req.user!.id, req));
   });
   router.post('/2fa/enable', requireAuth, limiter, validateBody(totpCodeSchema), async (req, res) => {
-    res.json({ user: await svc.enableTwoFactor(req.user!.id, req.body.code, req) });
+    const { backupCodes, ...user } = await svc.enableTwoFactor(req.user!.id, req.body.code, req);
+    res.json({ user, backupCodes });
   });
   router.post('/2fa/disable', requireAuth, limiter, validateBody(totpDisableSchema), async (req, res) => {
     res.json({ user: await svc.disableTwoFactor(req.user!.id, req.body.password, req.body.code, req) });

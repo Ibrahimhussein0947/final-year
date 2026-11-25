@@ -1,3 +1,5 @@
+import { open as openSecret, seal as sealSecret } from '../../lib/secretBox';
+import { createHash, randomBytes as rb } from 'node:crypto';
 import { randomInt } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { Request } from 'express';
@@ -19,8 +21,9 @@ const OTP_MAX_ATTEMPTS = 5;
 // Compared against when the phone is unknown so login time does not reveal which numbers exist.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', env.BCRYPT_ROUNDS);
 
-export const publicUser = (u: Pick<User, 'id' | 'fullName' | 'phone' | 'email' | 'role' | 'locale' | 'phoneVerifiedAt' | 'emailVerifiedAt'> & { mustChangePassword?: boolean; totpEnabledAt?: Date | null }) => ({
+export const publicUser = (u: Pick<User, 'id' | 'fullName' | 'phone' | 'email' | 'role' | 'locale' | 'phoneVerifiedAt' | 'emailVerifiedAt'> & { mustChangePassword?: boolean; totpEnabledAt?: Date | null; adminLevel?: 'FULL' | 'MODERATOR' | 'AUDITOR' }) => ({
   id: u.id,
+  ...(u.role === 'ADMIN' ? { adminLevel: u.adminLevel ?? 'FULL' } : {}),
   fullName: u.fullName,
   phone: u.phone,
   email: u.email,
@@ -119,12 +122,23 @@ export async function login(input: LoginInput, req: Request) {
   }
   if (user.totpEnabledAt && user.totpSecret) {
     if (!input.totpCode) throw twoFactorRequired();
-    const step = verifyCode(user.totpSecret, input.totpCode);
-    if (step === null || (user.totpLastStep !== null && step <= user.totpLastStep)) {
-      await audit(req, user.id, 'auth.2fa_failed', 'User', user.id);
-      throw unauthorized('Incorrect or already used code');
+    if (/^\d{6}$/.test(input.totpCode.trim())) {
+      const step = verifyCode(openSecret(user.totpSecret), input.totpCode);
+      if (step === null || (user.totpLastStep !== null && step <= user.totpLastStep)) {
+        await audit(req, user.id, 'auth.2fa_failed', 'User', user.id);
+        throw unauthorized('Incorrect or already used code');
+      }
+      await prisma.user.update({ where: { id: user.id }, data: { totpLastStep: step } });
+    } else {
+      // A one-time backup code (for a lost authenticator). Each works once.
+      const hash = hashBackupCode(input.totpCode);
+      const used = await prisma.user.updateMany({ where: { id: user.id, totpBackupCodes: { has: hash } }, data: { totpBackupCodes: user.totpBackupCodes.filter((h) => h !== hash) } });
+      if (!used.count) {
+        await audit(req, user.id, 'auth.2fa_failed', 'User', user.id);
+        throw unauthorized('Incorrect or already used code');
+      }
+      await audit(req, user.id, 'auth.2fa_backup_code_used', 'User', user.id);
     }
-    await prisma.user.update({ where: { id: user.id }, data: { totpLastStep: step } });
   }
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await audit(req, user.id, 'auth.login', 'User', user.id);
@@ -310,7 +324,7 @@ export async function startTwoFactorSetup(userId: string, req: Request) {
   if (user.role !== 'ADMIN') throw forbidden('Two-factor login is for administrator accounts');
   if (user.totpEnabledAt) throw conflict('Two-factor login is already on');
   const secret = generateSecret();
-  await prisma.user.update({ where: { id: userId }, data: { totpSecret: secret, totpLastStep: null } });
+  await prisma.user.update({ where: { id: userId }, data: { totpSecret: sealSecret(secret), totpLastStep: null } });
   await audit(req, userId, 'auth.2fa_setup_started', 'User', userId);
   return { secret, otpauthUrl: otpauthUrl(secret, user.phone) };
 }
@@ -318,20 +332,23 @@ export async function startTwoFactorSetup(userId: string, req: Request) {
 export async function enableTwoFactor(userId: string, code: string, req: Request) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.totpSecret || user.totpEnabledAt) throw badRequest('Start the setup first');
-  const step = verifyCode(user.totpSecret, code);
+  const step = verifyCode(openSecret(user.totpSecret), code);
   if (step === null) throw badRequest('Incorrect code. Check the time on your phone and try again.');
-  await prisma.user.update({ where: { id: userId }, data: { totpEnabledAt: new Date(), totpLastStep: step } });
+  const backupCodes = Array.from({ length: 8 }, () => { const h = rb(5).toString('hex'); return `${h.slice(0, 5)}-${h.slice(5)}`; });
+  await prisma.user.update({ where: { id: userId }, data: { totpEnabledAt: new Date(), totpLastStep: step, totpBackupCodes: backupCodes.map(hashBackupCode) } });
   await audit(req, userId, 'auth.2fa_enabled', 'User', userId);
-  return me(userId);
+  return { ...(await me(userId)), backupCodes }; // shown once; only their hashes are kept
 }
 
 export async function disableTwoFactor(userId: string, password: string, code: string, req: Request) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.totpSecret || !user.totpEnabledAt) throw badRequest('Two-factor login is not on');
   if (!(await bcrypt.compare(password, user.passwordHash))) throw badRequest('Password is incorrect', { password: ['Password is incorrect'] });
-  const step = verifyCode(user.totpSecret, code);
+  const step = verifyCode(openSecret(user.totpSecret), code);
   if (step === null || (user.totpLastStep !== null && step <= user.totpLastStep)) throw badRequest('Incorrect or already used code');
-  await prisma.user.update({ where: { id: userId }, data: { totpSecret: null, totpEnabledAt: null, totpLastStep: null } });
+  await prisma.user.update({ where: { id: userId }, data: { totpSecret: null, totpEnabledAt: null, totpLastStep: null, totpBackupCodes: [] } });
   await audit(req, userId, 'auth.2fa_disabled', 'User', userId);
   return me(userId);
 }
+
+const hashBackupCode = (code: string) => createHash('sha256').update(code.trim().toLowerCase().replace(/[^a-z0-9]/g, '')).digest('hex');

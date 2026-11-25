@@ -7,6 +7,7 @@ import { notify } from '../notifications/service';
 import { orgIdFor } from '../jobs/service';
 import { workerIdFor } from '../workers/service';
 import { getPolicy } from '../hiring/service';
+import { releaseHired } from '../hiring/availability';
 
 /**
  * Offer, accepted, started. The decision to hire stays in the application workflow (and its hiring rules): an offer can
@@ -66,7 +67,7 @@ const view = (o: Row, now = new Date()): OfferView => ({
 async function settleExpiry(o: Row): Promise<Row> {
   if (o.status === 'OFFERED' && o.respondBy.getTime() < today().getTime()) {
     const claimed = await prisma.jobOffer.updateMany({ where: { id: o.id, status: 'OFFERED' }, data: { status: 'EXPIRED' } });
-    if (claimed.count) await tellEmployer(o, 'offer.expired');
+    if (claimed.count) { await tellEmployer(o, 'offer.expired'); await releaseHired(o.workerId, o.applicationId); }
     return { ...o, status: 'EXPIRED' };
   }
   return o;
@@ -115,6 +116,7 @@ export async function withdrawOffer(userId: string, offerId: string): Promise<Of
   if (!o) throw notFound('Offer not found');
   if (o.status !== 'OFFERED' && o.status !== 'ACCEPTED') throw conflict(o.status === 'STARTED' ? 'The person already started' : 'This offer is already closed');
   const row = await prisma.jobOffer.update({ where: { id: o.id }, data: { status: 'WITHDRAWN' }, include: rowInclude });
+  await releaseHired(o.workerId, o.applicationId);
   const w = await prisma.workerProfile.findUnique({ where: { id: o.workerId }, select: { userId: true } });
   if (w) await notify(w.userId, 'offer.withdrawn', { offerId: o.id, applicationId: o.applicationId, jobId: o.application.job.id, jobTitle: o.application.job.title, organizationName: o.organization.name, wasAccepted: o.status === 'ACCEPTED' });
   return view(row);
@@ -141,6 +143,7 @@ export async function respondToOffer(userId: string, offerId: string, accept: bo
   if (o.status !== 'OFFERED') throw conflict('This offer is no longer waiting for an answer');
   const claimed = await prisma.jobOffer.updateMany({ where: { id: o.id, status: 'OFFERED' }, data: { status: accept ? 'ACCEPTED' : 'DECLINED', respondedAt: new Date() } });
   if (!claimed.count) throw conflict('This offer is no longer waiting for an answer');
+  if (!accept) await releaseHired(o.workerId, o.applicationId);
   await tellEmployer(o, 'offer.responded', { accepted: accept, startDate: day(o.startDate) });
   return view((await prisma.jobOffer.findUniqueOrThrow({ where: { id: o.id }, include: rowInclude })));
 }
@@ -179,7 +182,7 @@ export async function runOfferChecks(now = new Date()): Promise<{ expired: numbe
 
   const late = await prisma.jobOffer.findMany({ where: { status: 'OFFERED', respondBy: { lt: t } }, include: rowInclude, take: 500 });
   for (const o of late) {
-    if ((await prisma.jobOffer.updateMany({ where: { id: o.id, status: 'OFFERED' }, data: { status: 'EXPIRED' } })).count) { await tellEmployer(o, 'offer.expired'); out.expired++; }
+    if ((await prisma.jobOffer.updateMany({ where: { id: o.id, status: 'OFFERED' }, data: { status: 'EXPIRED' } })).count) { await tellEmployer(o, 'offer.expired'); await releaseHired(o.workerId, o.applicationId); out.expired++; }
   }
 
   const closing = await prisma.jobOffer.findMany({ where: { status: 'OFFERED', respondBy: { lte: addDays(t, 1), gte: t }, expiryRemindedAt: null }, include: rowInclude, take: 500 });
