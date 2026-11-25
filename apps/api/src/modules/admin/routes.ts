@@ -18,6 +18,7 @@ import { adminOrganizations, orgListSchema } from '../hiring/directory';
 import { adminListDefinitions, createDefinition, createDefinitionSchema, updateDefinition, updateDefinitionSchema } from '../criteria/admin';
 import { clearTranslationCache } from '../trust/routes';
 import { adminManageRouter } from './manage';
+import { adminInsightsRouter, exportRows } from './insights';
 
 const uuid = z.string().uuid();
 const idOf = (req: Request, name = 'id') => {
@@ -61,6 +62,7 @@ export function adminRouter() {
   const router = Router();
   router.use(requireAuth, requireRole('ADMIN'), enforceAdminLevel);
   router.use(adminManageRouter());
+  router.use(adminInsightsRouter());
 
   router.get('/stats', async (_req, res) => {
     res.json({ stats: await svc.platformStats() });
@@ -356,7 +358,7 @@ export function adminRouter() {
   });
 
   router.get('/export/:kind', async (req, res) => {
-    const kind = parse(z.enum(['platform-summary', 'jobs-by-region', 'applications-by-status']), req.params.kind);
+    const kind = parse(z.enum(['platform-summary', 'jobs-by-region', 'applications-by-status', 'users', 'jobs', 'organizations']), req.params.kind);
     let rows: unknown[][];
     if (kind === 'platform-summary') {
       const s = await svc.platformStats();
@@ -364,6 +366,8 @@ export function adminRouter() {
     } else if (kind === 'jobs-by-region') {
       const n = await nationalAnalytics();
       rows = [['region', 'open_jobs', 'vacancies', 'visible_workers', `note: values below ${K_MIN} are hidden`], ...n.regions.map((r) => [r.region, r.openJobs ?? `<${K_MIN}`, r.vacancies ?? `<${K_MIN}`, r.visibleWorkers ?? `<${K_MIN}`, ''])];
+    } else if (kind === 'users' || kind === 'jobs' || kind === 'organizations') {
+      rows = await exportRows(kind);
     } else {
       const g = await prisma.application.groupBy({ by: ['status'], _count: true });
       rows = [['status', 'applications'], ...g.map((x) => [x.status, x._count])];

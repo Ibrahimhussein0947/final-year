@@ -5,6 +5,7 @@ import { downloadProtected, useAdminAction, useAdminQuery, type AdminStats, type
 import { api } from '@/lib/api';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { AttentionCard, ExportButton, ExportCard, RecentCard, TrendsCard } from './pagesInsights';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '–');
 const ErrorLine = ({ text }: { text: string | null }) => (text ? <p role="alert" className="mt-2 text-sm text-danger">{text}</p> : null);
@@ -27,6 +28,7 @@ export function AdminOverview() {
   const s = stats.data?.stats;
   return (
     <div className="space-y-6">
+      <AttentionCard />
       {stats.isLoading && <Skeleton className="h-40" />}
       {stats.isError && <Alert tone="danger">Could not load the statistics.</Alert>}
       {s && (
@@ -51,6 +53,9 @@ export function AdminOverview() {
           </ul>
         )}
       </Card>
+      <TrendsCard />
+      <RecentCard />
+      <ExportCard />
     </div>
   );
 }
@@ -66,6 +71,12 @@ export function AdminUsers() {
   const list = useAdminQuery<Paged<AdminUser>>(['users', qs], `/users?${qs}`);
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const bulk = useAdminAction((a: { status: 'ACTIVE' | 'SUSPENDED'; reason?: string }) =>
+    api<{ changed: string[]; skipped: { id: string; reason: string }[] }>('/admin/users/bulk-status', { method: 'POST', body: { ids: picked, status: a.status, ...(a.reason ? { reason: a.reason } : {}) } })
+      .then((r) => { setBulkMsg(`${r.changed.length} changed${r.skipped.length ? `, ${r.skipped.length} skipped (${[...new Set(r.skipped.map((x) => x.reason))].join('; ')})` : ''}.`); setPicked([]); setBulkReason(''); }));
   const change = useAdminAction((a: { id: string; status: 'ACTIVE' | 'SUSPENDED'; reason?: string }) => api(`/admin/users/${a.id}/status`, { method: 'PATCH', body: { status: a.status, ...(a.reason ? { reason: a.reason } : {}) } }), { invalidate: ['users', 'stats'] });
   const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.pageSize)) : 1;
 
@@ -76,16 +87,29 @@ export function AdminUsers() {
         <label className="text-sm font-medium">Role<select className={`${select} mt-1.5 w-full`} value={role} onChange={(e) => { setRole(e.target.value); setPageNo(1); }}><option value="">All</option><option>WORKER</option><option>EMPLOYER</option><option>ADMIN</option></select></label>
         <label className="text-sm font-medium">Status<select className={`${select} mt-1.5 w-full`} value={status} onChange={(e) => { setStatus(e.target.value); setPageNo(1); }}><option value="">All</option><option>ACTIVE</option><option>SUSPENDED</option></select></label>
       </Card>
+      <div className="flex justify-end"><ExportButton kind="users" label="Export users (CSV)" /></div>
+      {picked.length > 0 && (
+        <Card className="flex flex-wrap items-center gap-2 p-3 text-sm">
+          <span className="font-medium">{picked.length} selected</span>
+          <input aria-label="Reason for suspending" className="h-9 w-56 rounded-lg border border-border bg-surface px-2 text-sm" placeholder="Reason (needed to suspend)" value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} />
+          <Button size="sm" variant="outline" className="text-danger" disabled={bulkReason.trim().length < 3} loading={bulk.isPending} onClick={() => bulk.mutate({ status: 'SUSPENDED', reason: bulkReason })}>Suspend selected</Button>
+          <Button size="sm" variant="outline" loading={bulk.isPending} onClick={() => bulk.mutate({ status: 'ACTIVE' })}>Reactivate selected</Button>
+          <Button size="sm" variant="ghost" onClick={() => setPicked([])}>Clear</Button>
+        </Card>
+      )}
+      {bulkMsg && <Alert tone="info">{bulkMsg}</Alert>}
+      <ErrorLine text={bulk.error} />
       {list.isLoading && <Skeleton className="h-64" />}
       {list.isError && <Alert tone="danger">Could not load users.</Alert>}
       <ErrorLine text={change.error} />
       {list.data && (
         <Card className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead><tr className="border-b border-border text-muted"><th className="p-3">Name</th><th className="p-3">Role</th><th className="p-3">Contact</th><th className="p-3">Joined</th><th className="p-3">Status</th><th className="p-3" /></tr></thead>
+            <thead><tr className="border-b border-border text-muted"><th className="w-8 p-3"><input type="checkbox" aria-label="Select all non-administrators on this page" checked={list.data.items.filter((u) => u.role !== 'ADMIN').length > 0 && list.data.items.filter((u) => u.role !== 'ADMIN').every((u) => picked.includes(u.id))} onChange={(e) => setPicked(e.target.checked ? list.data.items.filter((u) => u.role !== 'ADMIN').map((u) => u.id) : [])} /></th><th className="p-3">Name</th><th className="p-3">Role</th><th className="p-3">Contact</th><th className="p-3">Joined</th><th className="p-3">Status</th><th className="p-3" /></tr></thead>
             <tbody>
               {list.data.items.map((u) => (
                 <tr key={u.id} className="border-b border-border last:border-0 align-top">
+                  <td className="p-3">{u.role !== 'ADMIN' && <input type="checkbox" aria-label={`Select ${u.fullName}`} checked={picked.includes(u.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, u.id] : picked.filter((x) => x !== u.id))} />}</td>
                   <td className="p-3"><Link to={`/admin/users/${u.id}`} className="font-medium text-accent hover:underline">{u.fullName}</Link>{u.organization && <p className="text-xs text-muted">{u.organization.name} · {u.organization.verificationStatus.toLowerCase()}</p>}</td>
                   <td className="p-3">{u.role.toLowerCase()}</td>
                   <td className="p-3 text-xs">{u.phone}{u.phoneVerified ? ' ✓' : ''}<br />{u.email ?? '–'}</td>
@@ -103,7 +127,7 @@ export function AdminUsers() {
                   </td>
                 </tr>
               ))}
-              {list.data.items.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted">No users match.</td></tr>}
+              {list.data.items.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted">No users match.</td></tr>}
             </tbody>
           </table>
         </Card>
