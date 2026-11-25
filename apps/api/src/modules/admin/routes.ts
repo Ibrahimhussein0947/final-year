@@ -19,6 +19,7 @@ import { adminListDefinitions, createDefinition, createDefinitionSchema, updateD
 import { clearTranslationCache } from '../trust/routes';
 import { adminManageRouter } from './manage';
 import { adminInsightsRouter, exportRows } from './insights';
+import { adminOperationsRouter } from './operations';
 
 const uuid = z.string().uuid();
 const idOf = (req: Request, name = 'id') => {
@@ -46,8 +47,8 @@ const csv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).joi
  * Administrator levels. FULL may do everything. AUDITOR may only read. MODERATOR may read and act on reports,
  * job reviews and verifications, but cannot read the data exports or the administrator list.
  */
-const MODERATOR_WRITE = ['/moderation', '/verifications', '/jobs'];
-const MODERATOR_NO_READ = ['/export', '/admins'];
+const MODERATOR_WRITE = ['/moderation', '/verifications', '/jobs', '/support'];
+const MODERATOR_NO_READ = ['/export', '/admins', '/backups'];
 async function enforceAdminLevel(req: Request, _res: unknown, next: () => void) {
   const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { adminLevel: true } });
   const level = u?.adminLevel ?? 'FULL';
@@ -63,6 +64,7 @@ export function adminRouter() {
   router.use(requireAuth, requireRole('ADMIN'), enforceAdminLevel);
   router.use(adminManageRouter());
   router.use(adminInsightsRouter());
+  router.use(adminOperationsRouter());
 
   router.get('/stats', async (_req, res) => {
     res.json({ stats: await svc.platformStats() });

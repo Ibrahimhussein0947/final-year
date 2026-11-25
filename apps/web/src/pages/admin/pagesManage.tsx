@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { useAdminAction, useAdminQuery, type Paged } from '@/lib/admin';
 import { api } from '@/lib/api';
 import { useLocations } from '@/lib/profile';
+import { PrivacyTools } from './pagesOperations';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '–');
 const ErrorLine = ({ text }: { text: string | null }) => (text ? <p role="alert" className="mt-2 text-sm text-danger">{text}</p> : null);
@@ -369,6 +370,8 @@ export function AdminUserDetail() {
               {notice && <p role="status" className="mt-2 text-sm text-success">{notice}</p>}
             </Card>
           )}
+
+          {canAct && id && <PrivacyTools userId={id} name={u.fullName} />}
 
           <Card className="p-5">
             <h3 className="font-semibold">Recent activity</h3>

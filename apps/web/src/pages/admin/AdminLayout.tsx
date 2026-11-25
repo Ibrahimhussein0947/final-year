@@ -5,10 +5,10 @@ import { GlobalSearch } from './pagesInsights';
 
 const GROUPS: { title: string; tabs: [string, string][] }[] = [
   { title: 'Dashboard', tabs: [['/admin', 'Overview'], ['/admin/analytics', 'Analytics and reports'], ['/admin/performance', 'Performance']] },
-  { title: 'People and organizations', tabs: [['/admin/users', 'Users'], ['/admin/organizations', 'Organizations'], ['/admin/verification', 'Verification'], ['/admin/team', 'Administrators']] },
+  { title: 'People and organizations', tabs: [['/admin/users', 'Users'], ['/admin/organizations', 'Organizations'], ['/admin/verification', 'Verification'], ['/admin/support', 'Support inbox'], ['/admin/team', 'Administrators']] },
   { title: 'Jobs and safety', tabs: [['/admin/jobs', 'Jobs and applications'], ['/admin/moderation', 'Moderation'], ['/admin/hiring', 'Hiring rules'], ['/admin/criteria', 'Sector criteria']] },
   { title: 'Content', tabs: [['/admin/announcements', 'Announcements'], ['/admin/taxonomy', 'Skills and categories'], ['/admin/translations', 'Translations'], ['/admin/places', 'Places'], ['/admin/training', 'Training']] },
-  { title: 'System', tabs: [['/admin/matching', 'Matching and AI'], ['/admin/plans', 'Subscriptions'], ['/admin/settings', 'Settings and health'], ['/admin/audit', 'Activity log']] },
+  { title: 'System', tabs: [['/admin/matching', 'Matching and AI'], ['/admin/plans', 'Subscriptions'], ['/admin/settings', 'Settings and health'], ['/admin/deliveries', 'Delivery log'], ['/admin/backups', 'Backups'], ['/admin/audit', 'Activity log']] },
 ];
 
 const link = ({ isActive }: { isActive: boolean }) =>

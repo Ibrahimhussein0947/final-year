@@ -386,6 +386,12 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 | GET | `/announcements/active` | signed in |
 | GET | `/site/status` | public |
 
+## contact — `apps/api/src/modules/admin/operations.ts`
+
+| Method | Path | Access |
+|---|---|---|
+| POST | `/contact` | public |
+
 ## notifications — `apps/api/src/modules/notifications/routes.ts`
 
 | Method | Path | Access |
@@ -404,4 +410,4 @@ Also served outside `/api/v1`: `GET /health` (checks the database), and WebSocke
 |---|---|---|
 | POST | `/telegram/webhook` | public |
 
-Total: 243 routes.
+Total: 244 routes.

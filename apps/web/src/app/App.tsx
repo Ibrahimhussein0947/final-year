@@ -20,6 +20,7 @@ import { AdminTeam } from '@/pages/admin/pagesTeam';
 import { AdminPlans } from '@/pages/admin/pagesPlans';
 import { AdminTraining } from '@/pages/admin/pagesTraining';
 import { AdminPlaces } from '@/pages/admin/pagesPlaces';
+import { AdminBackups, AdminDeliveries, AdminSupport } from '@/pages/admin/pagesOperations';
 import { AdminAnnouncements, AdminJobs, AdminSettings, AdminUserDetail } from '@/pages/admin/pagesManage';
 import Dashboard from '@/pages/Dashboard';
 import WorkerProfilePage from '@/pages/worker/WorkerProfilePage';
@@ -114,6 +115,9 @@ export default function App() {
                   <Route path="announcements" element={<AdminAnnouncements />} />
                   <Route path="jobs" element={<AdminJobs />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="support" element={<AdminSupport />} />
+                  <Route path="deliveries" element={<AdminDeliveries />} />
+                  <Route path="backups" element={<AdminBackups />} />
                   <Route path="verification" element={<AdminVerification />} />
                   <Route path="moderation" element={<AdminModeration />} />
                   <Route path="taxonomy" element={<AdminTaxonomy />} />

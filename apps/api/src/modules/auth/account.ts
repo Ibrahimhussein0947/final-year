@@ -14,7 +14,7 @@ import { listMyProfileViews } from '../workers/views';
  * Secrets (password hash, authenticator secret, code hashes, session tokens) and the internal
  * matching vector are left out on purpose: they are not "their data" and are useless or risky to hand over.
  */
-export async function exportMyData(userId: string, req: Request) {
+export async function exportMyData(userId: string, req: Request, actorId: string = userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -57,7 +57,7 @@ export async function exportMyData(userId: string, req: Request) {
   const jobs = employer ? await prisma.job.findMany({ where: { postedById: userId } }) : [];
   if (worker) delete (worker as { embedding?: unknown }).embedding;
 
-  await audit(req, userId, 'account.data_exported', 'User', userId);
+  await audit(req, actorId, actorId === userId ? 'account.data_exported' : 'admin.user_data_exported', 'User', userId);
   return {
     exportedAt: new Date().toISOString(),
     note: 'This is the data EthioTalent AI holds about you. Passwords, login codes and internal matching vectors are not included.',
@@ -89,7 +89,13 @@ export async function deleteMyAccount(userId: string, password: string, req: Req
     await audit(req, userId, 'account.delete_failed', 'User', userId);
     throw badRequest('Password is incorrect', { password: ['Password is incorrect'] });
   }
+  await anonymiseAccount(userId);
+  await audit(req, userId, 'account.deleted', 'User', userId);
+  return { deleted: true };
+}
 
+/** The erasure itself, shared by "delete my account" and an administrator acting on a person's request. */
+export async function anonymiseAccount(userId: string) {
   const files = await prisma.fileAsset.findMany({ where: { ownerId: userId }, select: { id: true } });
   const unusable = await bcrypt.hash(randomBytes(32).toString('hex'), env.BCRYPT_ROUNDS);
 
@@ -129,6 +135,4 @@ export async function deleteMyAccount(userId: string, password: string, req: Req
   });
   for (const f of files) await deleteFileAsset(f.id); // also removes the stored file from disk
   disconnectUser(userId);
-  await audit(req, userId, 'account.deleted', 'User', userId);
-  return { deleted: true };
 }

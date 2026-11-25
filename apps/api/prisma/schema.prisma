@@ -1625,3 +1625,48 @@ model Announcement {
 
   @@index([startsAt, endsAt])
 }
+
+enum SupportStatus {
+  OPEN
+  RESOLVED
+}
+
+/// A message sent through the public contact form, handled in the admin support inbox.
+model SupportMessage {
+  id           String        @id @default(uuid())
+  name         String
+  email        String
+  message      String
+  status       SupportStatus @default(OPEN)
+  adminNote    String?
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum DeliveryChannel {
+  SMS
+  EMAIL
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
+  NOT_SENT // no provider configured: the message was only logged
+}
+
+/// One attempt to send an SMS or email. The recipient is stored masked and the message text is never stored.
+model DeliveryLog {
+  id        String          @id @default(uuid())
+  channel   DeliveryChannel
+  recipient String
+  subject   String?
+  status    DeliveryStatus
+  error     String?
+  createdAt DateTime        @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+}

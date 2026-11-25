@@ -8,6 +8,7 @@ import { Accordion } from '@/components/ui/Accordion';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { PageBody, PageHeader } from '@/pages/PageHeader';
 import { useI18n } from '@/i18n';
+import { api, ApiError } from '@/lib/api';
 import { detectPlatform, INSTALL_STEPS, PLATFORM_LABEL, usePwa, type Platform } from '@/app/pwa';
 
 function Prose({ children }: { children: React.ReactNode }) {
@@ -89,18 +90,30 @@ type ContactValues = z.infer<typeof contactSchema>;
 export function ContactPage() {
   const { t } = useI18n();
   const [sent, setSent] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm<ContactValues>({ resolver: zodResolver(contactSchema) });
+  const [failed, setFailed] = useState<string | null>(null);
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ContactValues>({ resolver: zodResolver(contactSchema) });
+  const submit = async (values: ContactValues) => {
+    setFailed(null);
+    try {
+      await api('/contact', { method: 'POST', body: values });
+      setSent(true);
+      reset();
+    } catch (e) {
+      setFailed(e instanceof ApiError && e.status === 429 ? 'Too many messages from this device. Please try again later.' : 'Your message could not be sent. Please try again.');
+    }
+  };
   return (
     <>
       <PageHeader title={t('contact.title')} subtitle={t('contact.subtitle')} />
       <PageBody narrow>
         <Card className="p-6">
-          <form noValidate onSubmit={handleSubmit(() => setSent(true))} className="space-y-4">
+          <form noValidate onSubmit={handleSubmit(submit)} className="space-y-4">
             <TextField label={t('contact.name')} error={errors.name?.message} {...register('name')} />
             <TextField label={t('auth.email')} type="email" error={errors.email?.message} {...register('email')} />
             <TextAreaField label={t('contact.message')} error={errors.message?.message} {...register('message')} />
-            {sent && <Alert tone="warning">Your message was validated, but the contact service is not connected yet, so nothing was sent.</Alert>}
-            <Button type="submit" variant="accent">{t('common.submit')}</Button>
+            {sent && <Alert tone="success">Thank you. Your message was sent and our team will reply by email.</Alert>}
+            {failed && <Alert tone="danger">{failed}</Alert>}
+            <Button type="submit" variant="accent" loading={isSubmitting}>{t('common.submit')}</Button>
           </form>
         </Card>
       </PageBody>

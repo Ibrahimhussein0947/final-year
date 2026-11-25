@@ -435,7 +435,7 @@ export async function listAdmins() {
 }
 
 /** The acting administrator must re-enter their own password: a stolen session alone cannot mint new administrators. */
-async function confirmAdminPassword(adminId: string, password: string) {
+export async function confirmAdminPassword(adminId: string, password: string) {
   const me = await prisma.user.findUnique({ where: { id: adminId }, select: { passwordHash: true } });
   if (!me || !(await bcrypt.compare(password, me.passwordHash))) throw forbidden('Your password is not correct');
 }

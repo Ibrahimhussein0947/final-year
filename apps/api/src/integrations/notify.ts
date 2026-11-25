@@ -1,5 +1,6 @@
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
+import { recordDelivery } from '../lib/deliveryLog';
 
 /**
  * Delivery adapters for SMS and email.
@@ -96,9 +97,11 @@ export const consoleNotifier: Notifier = {
   smsConfigured: () => false,
   async sendSms(to, text) {
     logger.info({ to, text }, '[dev] SMS not sent (no gateway configured)');
+    await recordDelivery('SMS', to, 'NOT_SENT');
   },
   async sendEmail(to, subject, text) {
     logger.info({ to, subject, text }, '[dev] email not sent (no provider configured)');
+    await recordDelivery('EMAIL', to, 'NOT_SENT', { subject });
   },
 };
 
@@ -113,16 +116,20 @@ export function createNotifier(
       if (!sms) return consoleNotifier.sendSms(to, text);
       try {
         await sms(to, text);
+        await recordDelivery('SMS', to, 'SENT');
       } catch (err) {
         logger.warn({ err: String(err) }, 'SMS delivery failed');
+        await recordDelivery('SMS', to, 'FAILED', { error: String(err) });
       }
     },
     async sendEmail(to, subject, text) {
       if (!email) return consoleNotifier.sendEmail(to, subject, text);
       try {
         await email(to, subject, text);
+        await recordDelivery('EMAIL', to, 'SENT', { subject });
       } catch (err) {
         logger.warn({ err: String(err) }, 'Email delivery failed');
+        await recordDelivery('EMAIL', to, 'FAILED', { subject, error: String(err) });
       }
     },
   };

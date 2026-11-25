@@ -32,6 +32,7 @@ import { offersRouter } from './modules/offers/routes';
 import { hiringRouter } from './modules/hiring/routes';
 import { skillTestsAdminRouter, skillTestsRouter } from './modules/skilltests/routes';
 import { verificationRouter } from './modules/verification/routes';
+import { contactRouter } from './modules/admin/operations';
 import { adminRouter } from './modules/admin/routes';
 import { siteRouter } from './modules/admin/manage';
 import { maintenanceGuard, useSettingsStore, type SettingsStore } from './modules/admin/settings';
@@ -91,6 +92,7 @@ export function createApp(opts: { authRateLimitMax?: number; settings?: Settings
   app.use('/api/v1/training', trainingRouter());
   app.use('/api/v1/admin', adminRouter());
   app.use('/api/v1', siteRouter());
+  app.use('/api/v1', contactRouter());
   app.use('/api/v1/notifications', notificationsRouter());
   app.use('/api/v1/telegram', telegramWebhookRouter());
 

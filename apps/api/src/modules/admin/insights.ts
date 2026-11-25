@@ -34,15 +34,19 @@ export async function trends(days: number) {
 /** Things an administrator should look at, each with the page that handles it. */
 export async function attention() {
   const weekAgo = new Date(Date.now() - 7 * DAY);
-  const [verifications, reports, pendingJobs, orgs, noApplicants, pastDeadline] = await Promise.all([
+  const [verifications, reports, pendingJobs, orgs, noApplicants, pastDeadline, support, failedDeliveries] = await Promise.all([
     prisma.verificationRequest.count({ where: { status: 'PENDING' } }),
     prisma.report.count({ where: { status: { in: ['OPEN', 'UNDER_REVIEW'] } } }),
     prisma.job.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.organization.count({ where: { verificationStatus: 'PENDING' } }),
     prisma.job.count({ where: { status: 'ACTIVE', createdAt: { lt: weekAgo }, applications: { none: {} } } }),
     prisma.job.count({ where: { status: 'ACTIVE', deadline: { lt: new Date() } } }),
+    prisma.supportMessage.count({ where: { status: 'OPEN' } }),
+    prisma.deliveryLog.count({ where: { status: 'FAILED', createdAt: { gte: new Date(Date.now() - DAY) } } }),
   ]);
   const items = [
+    { key: 'support', label: 'Support messages waiting for a reply', count: support, to: '/admin/support' },
+    { key: 'failedDeliveries', label: 'SMS or emails that failed in the last 24 hours', count: failedDeliveries, to: '/admin/deliveries' },
     { key: 'verifications', label: 'Verification requests waiting', count: verifications, to: '/admin/verification' },
     { key: 'reports', label: 'Open reports', count: reports, to: '/admin/moderation' },
     { key: 'pendingJobs', label: 'Jobs waiting for review', count: pendingJobs, to: '/admin/moderation' },
